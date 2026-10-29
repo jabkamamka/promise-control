@@ -64,7 +64,7 @@ def _strip_tail(text: str) -> str:
     return " ".join(parts)
 
 _DOC_RE = re.compile(
-    r"((?:[а-я]+\s+){0,2}(?:" + "|".join(o for o in DOC_OBJECTS) + r")[а-я]*)"
+    r"\b((?:[а-я]+\s+){0,2}(?:" + "|".join(o for o in DOC_OBJECTS) + r")[а-я]*)"
 )
 _TARGET_RE = re.compile(r"((?:на|в)\s+(?:склад|логистик\w*|производств\w*|сервисн\w*\s+служб\w*)|"
                         r"руководител\w*|бухгалтери\w*|юрист\w*|отдел\w*|бригад\w*|инженер\w*|коллег\w*)")
@@ -123,27 +123,40 @@ def _has_doc_object(text: str) -> bool:
     return bool(_DOC_RE.search(text))
 
 
-def _extract_object(text: str) -> str:
+def _extract_object(text: str, type_code: str = "") -> str:
+    """Объект обещания: что именно отправят или кому передадут."""
+    if type_code == "transfer":
+        m = _TARGET_RE.search(text)
+        return m.group(1).strip() if m else ""
+    if type_code not in ("documents", "notification"):
+        return ""
+
     m = _DOC_RE.search(text)
-    if m:
-        obj = m.group(1).strip()
-        obj = re.sub(r"^(?:вам|мне|его|ее|её|их|этот|эту|это)\s+", "", obj)
-        return obj
-    m = _TARGET_RE.search(text)
-    if m:
-        return m.group(1).strip()
-    return ""
+    if not m:
+        return ""
+    parts = m.group(1).split()
+    stop = {"вам", "мне", "его", "ее", "её", "их", "этот", "эту", "это", "пожалуйста", "сразу"}
+    while parts and (parts[0] in _VERB_BY_FORM or parts[0] in stop):
+        parts.pop(0)
+    return " ".join(parts).strip()
 
 
-def _refine_type(verb: Verb, clause: str, types: dict[str, PromiseType]) -> tuple[str, int]:
-    """Уточняет тип по объекту и адресату; возвращает (code, priority)."""
+def _refine_type(
+    verb: Verb, clause: str, types: dict[str, PromiseType], context: str | None = None
+) -> tuple[str, int]:
+    """Уточняет тип по объекту и адресату; возвращает (code, priority).
+
+    `context` — вся реплика оператора: смысл обещания часто разнесён на два
+    предложения («нужно уточнить… я перезвоню в понедельник»).
+    """
     base = verb.hint
+    ctx = context or clause
     has_doc = _has_doc_object(clause)
     has_sms = "смс" in clause or "уведомл" in clause
     has_visit = "выезд" in clause or "визит" in clause
     has_internal = any(t in clause for t in INTERNAL_TARGETS)
-    has_clarify = any(stem in clause for stem in CLARIFY_STEMS)
-    has_return = any(marker in clause for marker in RETURN_MARKERS)
+    has_clarify = any(stem in ctx for stem in CLARIFY_STEMS)
+    has_return = any(marker in ctx for marker in RETURN_MARKERS)
 
     if base == "documents" and has_sms and not has_doc:
         base = "notification"
@@ -154,9 +167,14 @@ def _refine_type(verb: Verb, clause: str, types: dict[str, PromiseType]) -> tupl
 
     priority = types[base].priority if base in types else 50
 
-    # Уточнение + «вернуться с ответом» — это третий тип из кейса, он важнее звонка.
+    # Уточнение + «вернуться с ответом» — третий тип из кейса, он важнее звонка.
     if base == "clarification" and has_clarify and has_return:
         priority = max(priority, 88)
+    elif base == "callback" and has_clarify and has_return:
+        # «Мне нужно уточнить у производства, я перезвоню в понедельник» —
+        # это «уточнить и вернуться с ответом», а не просто звонок
+        base = "clarification"
+        priority = max(types[base].priority if base in types else 0, 88)
     elif base == "clarification" and not has_clarify:
         # «Проверю статус и наберу вас» — обещание вернуться, но не уточнение по сути
         priority = min(priority, 55)
@@ -292,7 +310,7 @@ def detect_promises(
                 continue
 
             for verb in verbs:
-                code, priority = _refine_type(verb, clause_norm, builtin_types)
+                code, priority = _refine_type(verb, clause_norm, builtin_types, normalize_text(text))
                 candidates.append(
                     PromiseCandidate(type_code=code, priority=priority, verb=verb, clause=clause)
                 )
@@ -350,7 +368,7 @@ def detect_promises(
                 quote=text,
                 transcript_index=index,
                 actions=actions,
-                object=_extract_object(" ".join(all_clauses)),
+                object=_extract_object(" ".join(all_clauses), primary_code),
                 due=deadline,
                 confidence=confidence,
                 matched_by=by_type[primary_code][0].matched_by,

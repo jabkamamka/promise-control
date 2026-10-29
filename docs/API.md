@@ -260,7 +260,7 @@
   "calls_total": 52,
   "tasks_total": 189,
   "by_status": { "created": 189, "in_progress": 0, "done": 0 },
-  "by_type": { "documents": 85, "clarification": 76, "callback": 57 },
+  "by_type": { "clarification": 66, "documents": 58, "callback": 37, "fix": 19 },
   "overdue": 17,
   "due_today": 61,
   "avg_promises_per_call": 3.63
