@@ -25,3 +25,6 @@ sender_windows_*.exe
 *.m4a
 *.docx
 *.pdf
+
+# --- Личные локальные шутки, не публикуем ---
+local/

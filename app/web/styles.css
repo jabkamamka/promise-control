@@ -226,3 +226,22 @@ input[type="search"] { min-width: 260px; flex: 1 1 240px; }
   .task-head { flex-direction: column; }
   .task-actions { width: 100%; }
 }
+
+
+/* --- Пасхалка на Z: мини-игра --- */
+.arcade-box { width: min(560px, 96vw); }
+.arcade-sub { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.arcade-hud { display: flex; gap: 20px; flex-wrap: wrap; margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
+.arcade-hud b { color: var(--text); font-variant-numeric: tabular-nums; }
+.arcade-field { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.arcade-cell {
+  min-height: 74px; padding: 10px; border-radius: 12px; border: 1px solid var(--line);
+  background: #fff; font-size: 13.5px; line-height: 1.35; text-align: center;
+  transition: background .15s, border-color .15s, transform .08s;
+}
+.arcade-cell:hover { border-color: var(--accent); }
+.arcade-cell.hit { background: #e7f7ee; border-color: var(--ok); }
+.arcade-cell.miss { background: #fdeaea; border-color: var(--danger); }
+.arcade-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.arcade-hint { color: var(--muted); font-size: 13px; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; font-size: 12px; background: #fff; }

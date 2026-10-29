@@ -75,7 +75,30 @@
       </div>
     </div>
 
+    <div class="modal hidden" id="arcadeModal">
+      <div class="modal-box arcade-box">
+        <div class="modal-head">
+          <div>
+            <h2>Обещание-шутер</h2>
+            <p class="arcade-sub">Бей только по настоящим обещаниям. <kbd>Z</kbd> — открыть или начать заново</p>
+          </div>
+          <button class="ghost" id="closeArcade">Закрыть</button>
+        </div>
+        <div class="arcade-hud">
+          <span>Очки: <b id="arcadeScore">0</b></span>
+          <span>Время: <b id="arcadeTime">30</b> с</span>
+          <span>Рекорд: <b id="arcadeBest">0</b></span>
+        </div>
+        <div class="arcade-field" id="arcadeField"></div>
+        <div class="arcade-footer">
+          <button class="primary" id="arcadeStart">Начать</button>
+          <span class="arcade-hint" id="arcadeHint"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="toast" id="toast"></div>
     <script src="/static/app.js"></script>
+    <script src="/static/arcade.js"></script>
   </body>
 </html>
