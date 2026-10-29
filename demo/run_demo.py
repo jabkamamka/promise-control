@@ -115,13 +115,22 @@ def main() -> None:
     print(f"\n6. Фильтр по оператору op-anna: {len(by_operator)} задач")
 
     print("\n7. Добавляем новый тип обещания через API")
-    new_type = api("POST", "/promise-types", {
+    payload = {
         "name": "Переключить на отдел",
         "description": "Оператор обещает переключить клиента на профильный отдел.",
         "keywords": ["переключу", "соединю"],
         "action": "Соединить клиента с профильным отделом",
-    })
-    print(f"   тип создан: {new_type['code']} — {new_type['name']}")
+    }
+    try:
+        new_type = api("POST", "/promise-types", payload)
+        print(f"   тип создан: {new_type['code']} — {new_type['name']}")
+    except SystemExit as exc:
+        # Повторный запуск демо: тип уже есть, 409 — это нормально.
+        if "409" not in str(exc):
+            raise
+        existing = api("GET", "/promise-types")["items"]
+        new_type = next(t for t in existing if t["name"] == payload["name"])
+        print(f"   тип уже был создан ранее: {new_type['code']} — {new_type['name']}")
 
     extra = {
         "id": "demo-new-type",
