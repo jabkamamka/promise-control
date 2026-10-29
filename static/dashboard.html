@@ -110,6 +110,13 @@ function fmt(iso) {
   return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+// Всё, что пришло из звонка, — недоверенный текст: экранируем перед вставкой в HTML.
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+}
+
 async function loadStats() {
   const s = await (await fetch("/stats")).json();
   const cards = [
@@ -146,11 +153,11 @@ async function loadTasks() {
       actions.push(`<button class="small" data-act="done" data-id="${task.id}">Выполнено</button>`);
     }
     return `<tr>
-      <td>${task.id}</td>
-      <td class="type">${task.title}</td>
-      <td><span class="badge ${cls}">${label}</span></td>
-      <td class="due">${fmt(task.due_at)}</td>
-      <td class="quote">«${task.quote}»${task.due_phrase ? `<br><span style="font-size:12px">срок: ${task.due_phrase}</span>` : ""}</td>
+      <td>${esc(task.id)}</td>
+      <td class="type">${esc(task.title)}</td>
+      <td><span class="badge ${esc(cls)}">${esc(label)}</span></td>
+      <td class="due">${esc(fmt(task.due_at))}</td>
+      <td class="quote">«${esc(task.quote)}»${task.due_phrase ? `<br><span style="font-size:12px">срок: ${esc(task.due_phrase)}</span>` : ""}</td>
       <td><div class="actions">${actions.join("")}</div></td>
     </tr>`;
   }).join("");
@@ -158,7 +165,7 @@ async function loadTasks() {
   rows.querySelectorAll("button[data-act]").forEach(btn => {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      await fetch(`/tasks/${btn.dataset.id}/status`, {
+      await fetch(`/tasks/${encodeURIComponent(btn.dataset.id)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: btn.dataset.act, note: "Изменено в панели оператора" }),
@@ -173,7 +180,7 @@ async function loadOperators() {
   const ids = [...new Set(data.items.map(t => t.operator_id).filter(Boolean))].sort();
   const select = document.getElementById("operator");
   select.innerHTML = '<option value="">Все операторы</option>' +
-    ids.map(id => `<option value="${id}">${id}</option>`).join("");
+    ids.map(id => `<option value="${esc(id)}">${esc(id)}</option>`).join("");
 }
 
 async function refresh() {

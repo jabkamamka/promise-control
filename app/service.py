@@ -126,14 +126,14 @@ def create_type(payload: dict[str, Any]) -> dict[str, Any]:
     patterns = [str(p) for p in payload.get("patterns") or [] if str(p).strip()]
     examples = [str(e) for e in payload.get("examples") or [] if str(e).strip()]
 
-    # Без ключевых слов и шаблонов тип не сможет сработать на правилах —
-    # пробуем вывести опорные слова из описания и примеров.
+    # Без опорных слов тип не сможет сработать, а угадывать их из описания
+    # опасно: случайное «перезвонить» создаст дубль задачи к встроенному типу.
     if not keywords and not patterns:
-        keywords = _guess_keywords(description, examples)
-        if not keywords:
-            raise ServiceError(
-                "Укажите keywords или patterns, иначе тип не сможет находить обещания", 422
-            )
+        raise ServiceError(
+            "Укажите keywords (опорные слова) или patterns (регулярные выражения), "
+            "иначе тип не сможет находить обещания и будет дублировать другие типы",
+            422,
+        )
 
     for pattern in patterns:
         try:
@@ -161,22 +161,6 @@ def create_type(payload: dict[str, Any]) -> dict[str, Any]:
     return {"code": code, "name": name, "description": description,
             "keywords": keywords, "patterns": patterns, "examples": examples,
             "is_builtin": False, "active": True}
-
-
-def _guess_keywords(description: str, examples: list[str]) -> list[str]:
-    """Грубая догадка об опорных словах: слова из описания и примеров длиннее 5 букв."""
-    text = " ".join([description] + examples).lower()
-    words = re.findall(r"[а-яa-z]{6,}", text)
-    stop = {"который", "которая", "клиенту", "клиента", "оператор", "обещает", "обещание",
-            "нужно", "может", "будет", "чтобы", "также", "после", "через", "сегодня", "завтра"}
-    result: list[str] = []
-    for word in words:
-        if word in stop or word in result:
-            continue
-        result.append(word)
-        if len(result) >= 5:
-            break
-    return result
 
 
 def set_type_active(code: str, active: bool) -> dict[str, Any]:
@@ -382,8 +366,8 @@ def list_tasks(filters: dict[str, Any]) -> dict[str, Any]:
         params.append(_normalize_dt(filters["due_after"]))
 
     if filters.get("overdue") in (True, "true", "1", 1):
-        where.append("due_at < ? AND status IN ('created', 'in_progress')")
-        params.append(db.iso(db.utcnow()))
+        # Просрочка уже материализована в статус фоновой проверкой выше.
+        where.append("status = 'overdue'")
 
     if filters.get("q"):
         where.append("(title LIKE ? OR quote LIKE ?)")
@@ -439,31 +423,61 @@ def get_task(task_id: int) -> dict[str, Any]:
     return data
 
 
-def change_status(task_id: int, new_status: str, note: str | None = None) -> dict[str, Any]:
+def change_status(task_id: int, new_status: str, note: str | None = None,
+                  due_at: str | None = None) -> dict[str, Any]:
     if new_status not in STATUS_LABELS:
         raise ServiceError(f"Неизвестный статус {new_status!r}", 422)
     if new_status == "overdue":
         raise ServiceError("Статус «Просрочена» выставляется автоматически", 409)
 
-    now_iso = db.iso(db.utcnow())
+    now = db.utcnow()
+    now_iso = db.iso(now)
+
+    new_due: datetime | None = None
+    if due_at:
+        from .calls import parse_dt
+
+        new_due = parse_dt(due_at)
+        if new_due is None:
+            raise ServiceError(f"Не удалось разобрать срок: {due_at!r}", 422)
+        if new_due <= now:
+            raise ServiceError("Новый срок должен быть в будущем", 422)
+
     with db.connect() as conn:
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if not row:
             raise ServiceError(f"Задача {task_id} не найдена", 404)
         old = row["status"]
-        if old == new_status:
+        if old == new_status and new_due is None:
             return serialize_task(row)
-        if new_status not in ALLOWED_TRANSITIONS.get(old, set()):
+        if new_status != old and new_status not in ALLOWED_TRANSITIONS.get(old, set()):
             raise ServiceError(f"Недопустимый переход {STATUS_LABELS.get(old, old)} → {STATUS_LABELS[new_status]}", 409)
+        # Просроченную нельзя «вернуть в работу» со старым сроком: иначе следующая
+        # проверка снова сделает её просроченной. Нужен новый срок.
+        if old == "overdue" and new_status == "in_progress" and new_due is None:
+            raise ServiceError(
+                "Просроченная задача возвращается в работу только с новым сроком: передайте due_at",
+                422,
+            )
 
         closed_at = now_iso if new_status == "done" else None
-        conn.execute(
-            "UPDATE tasks SET status = ?, updated_at = ?, closed_at = ? WHERE id = ?",
-            (new_status, now_iso, closed_at, task_id),
-        )
+        if new_due is not None:
+            conn.execute(
+                "UPDATE tasks SET status = ?, updated_at = ?, closed_at = ?, due_at = ?, "
+                "due_source = 'manual', due_phrase = NULL WHERE id = ?",
+                (new_status, now_iso, closed_at, db.iso(new_due), task_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE tasks SET status = ?, updated_at = ?, closed_at = ? WHERE id = ?",
+                (new_status, now_iso, closed_at, task_id),
+            )
+        note_text = note or "Смена статуса через API"
+        if new_due is not None:
+            note_text += f"; новый срок: {db.iso(new_due)}"
         conn.execute(
             "INSERT INTO task_events (task_id, from_status, to_status, note, at) VALUES (?, ?, ?, ?, ?)",
-            (task_id, old, new_status, note or "Смена статуса через API", now_iso),
+            (task_id, old, new_status, note_text, now_iso),
         )
         updated = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     return serialize_task(updated)

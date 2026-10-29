@@ -49,6 +49,10 @@ class PromiseTypeIn(BaseModel):
 class StatusIn(BaseModel):
     status: str = Field(..., examples=["in_progress"])
     note: str | None = Field(None, examples=["Взял в работу"])
+    due_at: str | None = Field(
+        None, description="Новый срок (ISO). Обязателен при возврате просроченной задачи в работу",
+        examples=["2026-10-30T12:00:00+05:00"],
+    )
 
 
 # ---------------------------------------------------------------- инфраструктура
@@ -182,13 +186,13 @@ def get_task(task_id: int) -> dict[str, Any]:
 
 @app.patch("/tasks/{task_id}/status", tags=["tasks"])
 def patch_status(task_id: int, body: StatusIn) -> dict[str, Any]:
-    return service.change_status(task_id, body.status, body.note)
+    return service.change_status(task_id, body.status, body.note, body.due_at)
 
 
 @app.post("/tasks/{task_id}/status", tags=["tasks"])
 def post_status(task_id: int, body: StatusIn) -> dict[str, Any]:
     """Алиас PATCH — на случай, если клиент умеет только POST."""
-    return service.change_status(task_id, body.status, body.note)
+    return service.change_status(task_id, body.status, body.note, body.due_at)
 
 
 # -------------------------------------------------------------- типы обещаний

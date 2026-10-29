@@ -10,7 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
+from . import config
 from .text import Segment, to_segments
 
 
@@ -68,7 +70,7 @@ def parse_dt(value: Any) -> datetime | None:
             ts /= 1000
         return datetime.fromtimestamp(ts, tz=timezone.utc)
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=_local_tz())
     text = str(value).strip()
     if text.isdigit():
         return parse_dt(int(text))
@@ -85,7 +87,15 @@ def parse_dt(value: Any) -> datetime | None:
                 continue
         else:
             return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    # Дата без пояса — это местное время контакт-центра, а не UTC.
+    return dt if dt.tzinfo else dt.replace(tzinfo=_local_tz())
+
+
+def _local_tz() -> ZoneInfo:
+    try:
+        return ZoneInfo(config.DEFAULT_TZ)
+    except Exception:  # noqa: BLE001 - кривой пояс в конфиге не должен ронять приём
+        return ZoneInfo("UTC")
 
 
 def parse_call(raw: dict[str, Any], now: datetime | None = None) -> ParsedCall:

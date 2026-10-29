@@ -123,3 +123,60 @@ def test_bad_payload(client):
     response = client.post("/webhook/calls", json=[{"operator_id": "x"}])
     assert response.status_code == 200
     assert response.json()["errors"]
+
+
+def test_overdue_filter_matches_status(client):
+    client.post("/webhook/calls", json=[make_old_call()])
+    by_status = client.get("/tasks", params={"status": "overdue"}).json()["total"]
+    by_flag = client.get("/tasks", params={"overdue": "true"}).json()["total"]
+    assert by_status == by_flag == 1
+
+
+def test_overdue_reopen_requires_new_due(client):
+    client.post("/webhook/calls", json=[make_old_call()])
+    task = client.get("/tasks", params={"status": "overdue"}).json()["items"][0]
+
+    without_due = client.patch(f"/tasks/{task['id']}/status", json={"status": "in_progress"})
+    assert without_due.status_code == 422
+
+    future = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
+    reopened = client.patch(f"/tasks/{task['id']}/status",
+                            json={"status": "in_progress", "due_at": future})
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "in_progress"
+    assert reopened.json()["due_source"] == "manual"
+
+    # Повторное чтение не возвращает задачу в просроченные.
+    again = client.get(f"/tasks/{task['id']}").json()
+    assert again["status"] == "in_progress"
+
+
+def test_new_type_without_keywords_is_rejected(client):
+    response = client.post("/promise-types", json={
+        "name": "Обещание без опорных слов",
+        "description": "Оператор обещает перезвонить клиенту.",
+    })
+    assert response.status_code == 422
+
+
+def test_naive_time_is_local_not_utc(client):
+    """Дата без пояса — это время контакт-центра (PROMISE_TZ), а не UTC."""
+    from zoneinfo import ZoneInfo
+
+    from app import config
+
+    tz = ZoneInfo(config.DEFAULT_TZ)
+    end_local = (datetime.now(timezone.utc) - timedelta(minutes=5)).astimezone(tz)
+    payload = {
+        "id": "call-tz",
+        "operator_id": "op-3",
+        "started_at": (end_local - timedelta(minutes=6)).replace(tzinfo=None).isoformat(timespec="seconds"),
+        "ended_at": end_local.replace(tzinfo=None).isoformat(timespec="seconds"),
+        "transcript": [{"role": "operator", "text": "Перезвоню завтра в 10:00."}],
+    }
+    client.post("/webhook/calls", json=[payload])
+
+    expected = (end_local.replace(hour=10, minute=0, second=0, microsecond=0)
+                + timedelta(days=1)).astimezone(timezone.utc)
+    task = client.get("/tasks", params={"call_id": "call-tz"}).json()["items"][0]
+    assert task["due_at"] == expected.strftime("%Y-%m-%dT%H:%M:%SZ")
