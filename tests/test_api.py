@@ -1,40 +1,50 @@
-"""Сквозные тесты API: приём звонков, задачи, статусы, фильтры, новые типы."""
+"""Сквозные тесты API: приём звонков, задачи, статусы, фильтры, новые типы.
+
+Время звонков считается от текущего момента, иначе тесты начнут падать,
+когда «сегодняшние» звонки из фикстуры окажутся в прошлом.
+"""
 
 from datetime import datetime, timedelta, timezone
 
-CALL = {
-    "id": "call-001",
-    "operator_id": "op-1",
-    "phone": "+7 900 000-00-01",
-    "started_at": "2026-10-29T14:58:00+05:00",
-    "ended_at": "2026-10-29T15:00:00+05:00",
-    "transcript": [
-        {"role": "operator", "text": "Добрый день, это Анна из УралМикро."},
-        {"role": "client", "text": "Здравствуйте, хочу уточнить по счёту."},
-        {"role": "operator", "text": "Я перезвоню вам через час и отправлю договор на почту."},
-    ],
-}
 
-OLD_CALL = {
-    "id": "call-old",
-    "operator_id": "op-2",
-    "phone": "+7 900 000-00-02",
-    "started_at": "2026-10-27T09:28:00+05:00",
-    "ended_at": "2026-10-27T09:30:00+05:00",
-    "transcript": [
-        {"role": "operator", "text": "Уточню информацию и вернусь с ответом до конца дня."},
-    ],
-}
+def make_call(call_id: str = "call-001", operator: str = "op-1",
+              minutes_ago: int = 2, transcript: list[dict] | None = None) -> dict:
+    end = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+    start = end - timedelta(minutes=2)
+    return {
+        "id": call_id,
+        "operator_id": operator,
+        "phone": "+7 900 000-00-01",
+        "started_at": start.isoformat(timespec="seconds"),
+        "ended_at": end.isoformat(timespec="seconds"),
+        "transcript": transcript or [
+            {"role": "operator", "text": "Добрый день, это Анна из УралМикро."},
+            {"role": "client", "text": "Здравствуйте, хочу уточнить по счёту."},
+            {"role": "operator", "text": "Я перезвоню вам через час и отправлю договор на почту."},
+        ],
+    }
+
+
+def make_old_call() -> dict:
+    return make_call(
+        call_id="call-old",
+        operator="op-2",
+        minutes_ago=60 * 48,
+        transcript=[{
+            "role": "operator",
+            "text": "Уточню информацию и вернусь с ответом до конца дня.",
+        }],
+    )
 
 
 def test_webhook_creates_tasks_and_is_idempotent(client):
-    response = client.post("/webhook/calls", json=[CALL])
+    response = client.post("/webhook/calls", json=[make_call()])
     assert response.status_code == 200
     body = response.json()
     assert body["accepted"] == 1
     assert body["tasks_created"] == 2
 
-    again = client.post("/webhook/calls", json=[CALL]).json()
+    again = client.post("/webhook/calls", json=[make_call()]).json()
     assert again["duplicates"] == 1
     assert again["tasks_created"] == 0
 
@@ -43,7 +53,8 @@ def test_webhook_creates_tasks_and_is_idempotent(client):
 
 
 def test_filters_and_status_flow(client):
-    client.post("/webhook/calls", json=[CALL])
+    call = make_call()
+    client.post("/webhook/calls", json=[call])
     tasks = client.get("/tasks", params={"operator_id": "op-1", "status": "created"}).json()["items"]
     assert len(tasks) == 2
 
@@ -60,25 +71,25 @@ def test_filters_and_status_flow(client):
 
 
 def test_overdue_is_set_automatically(client):
-    client.post("/webhook/calls", json=[OLD_CALL])
+    client.post("/webhook/calls", json=[make_old_call()])
     items = client.get("/tasks", params={"operator_id": "op-2"}).json()["items"]
     assert items and items[0]["status"] == "overdue"
     assert items[0]["status_label"] == "Просрочена"
 
 
 def test_manual_overdue_is_rejected(client):
-    client.post("/webhook/calls", json=[CALL])
+    client.post("/webhook/calls", json=[make_call()])
     task_id = client.get("/tasks").json()["items"][0]["id"]
     response = client.patch(f"/tasks/{task_id}/status", json={"status": "overdue"})
     assert response.status_code == 409
 
 
-def test_illegal_transition(client):
-    client.post("/webhook/calls", json=[CALL])
+def test_done_is_idempotent(client):
+    client.post("/webhook/calls", json=[make_call()])
     task_id = client.get("/tasks").json()["items"][0]["id"]
     client.patch(f"/tasks/{task_id}/status", json={"status": "done"})
     response = client.patch(f"/tasks/{task_id}/status", json={"status": "done"})
-    assert response.status_code == 200  # идемпотентно
+    assert response.status_code == 200
 
 
 def test_new_promise_type_by_semantic_description(client):
@@ -91,7 +102,7 @@ def test_new_promise_type_by_semantic_description(client):
     assert created.status_code == 201
     code = created.json()["code"]
 
-    call = dict(CALL, id="call-002", transcript=[
+    call = make_call("call-002", transcript=[
         {"role": "operator", "text": "Сейчас переключу вас на отдел продаж."},
     ])
     client.post("/webhook/calls", json=[call])
@@ -100,7 +111,7 @@ def test_new_promise_type_by_semantic_description(client):
 
 
 def test_stats(client):
-    client.post("/webhook/calls", json=[CALL, OLD_CALL])
+    client.post("/webhook/calls", json=[make_call(), make_old_call()])
     stats = client.get("/stats").json()
     assert stats["calls_total"] == 2
     assert stats["tasks_total"] == 3
@@ -109,4 +120,6 @@ def test_stats(client):
 
 def test_bad_payload(client):
     assert client.post("/webhook/calls", json={"foo": "bar"}).status_code == 422
-    assert client.post("/webhook/calls", json=[{"operator_id": "x"}]).json()["errors"]
+    response = client.post("/webhook/calls", json=[{"operator_id": "x"}])
+    assert response.status_code == 200
+    assert response.json()["errors"]
