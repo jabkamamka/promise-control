@@ -1,0 +1,13 @@
+[project]
+name = "promise-control"
+version = "1.0.0"
+description = "Сервис контроля обещаний: расшифровка звонка → обещания оператора → задачи со сроком"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

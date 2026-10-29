@@ -1,8 +1,27 @@
+# --- Python ---
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
 .venv/
 venv/
-data/
-.pytest_cache/
+
+# --- Local data ---
+data/*.db
+data/*.db-*
+*.sqlite3
 .env
-*.log
+.env.local
+
+# --- OS / editors ---
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/
+
+# --- Case materials that must never be published ---
+sender_windows_*.exe
+*.m4a
+*.docx
+*.pdf

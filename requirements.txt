@@ -1,4 +1,4 @@
-fastapi>=0.110,<1.0
-uvicorn[standard]>=0.27,<1.0
-pydantic>=2.5,<3.0
-tzdata>=2024.1; platform_system == "Windows"
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+tzdata==2026.6
