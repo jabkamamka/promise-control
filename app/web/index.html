@@ -3,79 +3,226 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Сервис контроля обещаний</title>
+    <meta name="theme-color" content="#f2eee5" />
+    <meta name="color-scheme" content="light" />
+    <title>Контроль обещаний — панель оператора</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#taskList">Перейти к задачам</a>
+
     <header class="topbar">
-      <div class="brand">
-        <div class="logo">✓</div>
-        <div>
-          <h1>Контроль обещаний</h1>
-          <p>Задачи операторов, найденные в расшифровках звонков</p>
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path
+                d="M9 26h7l4.5-12 6.5 23 5-15h7"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle cx="39" cy="22" r="2.8" fill="#ff5a1f" />
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <p class="eyebrow">UralMicro <span class="eyebrow-slash">/</span> пульт оператора</p>
+            <h1>Контроль <em>обещаний</em></h1>
+            <p class="brand-sub">Очередь задач, найденных в расшифровках звонков</p>
+          </div>
         </div>
+
+        <section class="telemetry" aria-label="Оперативная сводка">
+          <div class="telemetry-head">
+            <span class="telemetry-title">Сводка</span>
+            <span class="live-chip" title="Сводка обновляется автоматически">
+              <span class="live-dot" aria-hidden="true"></span>
+              <span class="pulse-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <span class="live-text">LIVE</span>
+            </span>
+          </div>
+          <div class="stats" id="stats" aria-label="Сводка по задачам"></div>
+          <div class="telemetry-foot">
+            <span class="sync-age" id="syncAge">синхронизация…</span>
+          </div>
+        </section>
       </div>
-      <div class="stats" id="stats"></div>
     </header>
 
     <main>
-      <section class="toolbar">
-        <div class="chips" id="statusChips"></div>
-        <select id="typeFilter" aria-label="Тип обещания"></select>
-        <input id="search" type="search" placeholder="Поиск по задаче, цитате или объекту" />
-        <button id="refresh">Обновить</button>
-        <button id="openTypes" class="ghost">Типы обещаний</button>
+      <section class="toolbar" aria-label="Фильтры задач">
+        <div class="filter-head">
+          <p class="filter-title">Статус задачи</p>
+          <p class="filter-note">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16"></path>
+              <path d="M4 12h10"></path>
+              <path d="M4 18h5"></path>
+            </svg>
+            Ранг 1 — самый срочный
+          </p>
+        </div>
+
+        <div class="chips" id="statusChips" role="group" aria-label="Фильтр по статусу, ранжированный по срочности"></div>
+
+        <div class="toolbar-controls">
+          <label class="search-field" for="search">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4.5 4.5"></path>
+            </svg>
+            <span class="sr-only">Поиск</span>
+            <input
+              id="search"
+              type="search"
+              placeholder="Задача, цитата или объект"
+              autocomplete="off"
+              aria-keyshortcuts="/"
+            />
+            <kbd class="search-key" aria-hidden="true">/</kbd>
+          </label>
+
+          <label class="select-field">
+            <span class="sr-only">Тип обещания</span>
+            <select id="typeFilter" aria-label="Тип обещания"></select>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 10 5 5 5-5"></path>
+            </svg>
+          </label>
+
+          <div class="toolbar-actions">
+            <button id="refresh" class="ghost" type="button">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-.8 4.2"></path>
+                <path d="M20 5v6h-6"></path>
+              </svg>
+              <span>Обновить</span>
+            </button>
+
+            <button id="openTypes" class="ghost toolbar-strong" type="button" aria-label="Типы обещаний">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m12 3 9 5-9 5-9-5 9-5Z"></path>
+                <path d="m3 12 9 5 9-5"></path>
+                <path d="m3 16 9 5 9-5"></path>
+              </svg>
+              <span class="label-wide">Типы обещаний</span>
+              <span class="label-compact">Типы</span>
+            </button>
+
+            <button id="openAnalytics" class="ghost toolbar-strong" type="button" aria-label="Аналитика">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 20V11"></path>
+                <path d="M10 20V4"></path>
+                <path d="M16 20v-6"></path>
+                <path d="M22 20H2"></path>
+              </svg>
+              <span class="label-wide">Аналитика</span>
+              <span class="label-compact">Графики</span>
+            </button>
+          </div>
+        </div>
       </section>
 
-      <section id="taskList" class="task-list"></section>
+      <section class="queue-head" aria-label="Очередь задач">
+        <div>
+          <p class="eyebrow">Рабочая очередь</p>
+          <h2>Обещания операторов</h2>
+        </div>
+        <p class="queue-note">
+          <span>найдено <b id="queueCount">—</b></span>
+          <span class="queue-sep" aria-hidden="true">·</span>
+          <span>сначала ближайшие сроки</span>
+        </p>
+      </section>
+
+      <section id="taskList" class="task-list" aria-live="polite"></section>
+
       <div class="load-more" id="loadMoreWrap">
-        <button id="loadMore">Показать ещё</button>
+        <button id="loadMore" class="ghost load-more-btn" type="button">
+          Показать ещё
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="m6 13 6 6 6-6"></path>
+          </svg>
+        </button>
       </div>
     </main>
 
-    <aside class="drawer" id="typesDrawer" aria-hidden="true">
-      <div class="drawer-head">
-        <h2>Типы обещаний</h2>
-        <button class="ghost" id="closeTypes">Закрыть</button>
+    <aside
+      class="drawer"
+      id="typesDrawer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="typesTitle"
+      aria-hidden="true"
+    >
+      <div class="drawer-top">
+        <div>
+          <p class="eyebrow">Классификатор</p>
+          <h2 id="typesTitle">Типы обещаний</h2>
+          <p class="drawer-sub">Встроенные правила и собственные категории, по которым ищутся обещания.</p>
+        </div>
+        <button class="icon-btn" id="closeTypes" type="button" aria-label="Закрыть панель типов">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12"></path>
+            <path d="M18 6 6 18"></path>
+          </svg>
+        </button>
       </div>
-      <div id="typesList"></div>
 
-      <h3 style="margin: 22px 0 10px">Добавить свой тип</h3>
-      <form id="typeForm">
-        <div class="form-row">
-          <label for="tTitle">Название</label>
-          <input id="tTitle" required minlength="3" placeholder="Например: Согласовать скидку" />
+      <div id="typesList" class="types-list"></div>
+
+      <div class="drawer-form">
+        <div class="section-head">
+          <p class="eyebrow">Новый тип</p>
+          <h3>Добавить свой тип</h3>
         </div>
-        <div class="form-row">
-          <label for="tDescription">Смысловое описание (что именно обещает оператор)</label>
-          <textarea id="tDescription" placeholder="Оператор обещает согласовать скидку с руководителем и вернуться с ответом"></textarea>
-        </div>
-        <div class="form-row">
-          <label for="tKeywords">Ключевые слова через запятую</label>
-          <input id="tKeywords" placeholder="скидк, согласую" />
-        </div>
-        <div class="form-row">
-          <label for="tExamples">Примеры реплик (по одному в строке)</label>
-          <textarea id="tExamples" placeholder="Согласую скидку и перезвоню завтра"></textarea>
-        </div>
-        <button class="primary" type="submit">Добавить тип</button>
-      </form>
+        <form id="typeForm">
+          <div class="form-row">
+            <label for="tTitle">Название</label>
+            <input id="tTitle" required minlength="3" placeholder="Например: Согласовать скидку" />
+          </div>
+          <div class="form-row">
+            <label for="tDescription">Смысловое описание (что именно обещает оператор)</label>
+            <textarea
+              id="tDescription"
+              placeholder="Оператор обещает согласовать скидку с руководителем и вернуться с ответом"
+            ></textarea>
+          </div>
+          <div class="form-row">
+            <label for="tKeywords">Ключевые слова через запятую</label>
+            <input id="tKeywords" placeholder="скидк, согласую" />
+          </div>
+          <div class="form-row">
+            <label for="tExamples">Примеры реплик (по одной в строке)</label>
+            <textarea id="tExamples" placeholder="Согласую скидку и перезвоню завтра"></textarea>
+          </div>
+          <button class="primary" type="submit">Добавить тип</button>
+        </form>
+      </div>
     </aside>
 
-    <div class="modal hidden" id="callModal">
+    <div class="modal hidden" id="callModal" role="dialog" aria-modal="true" aria-labelledby="callTitle">
       <div class="modal-box">
         <div class="modal-head">
           <div>
+            <p class="eyebrow">Расшифровка звонка</p>
             <h2 id="callTitle">Звонок</h2>
-            <p id="callMeta" style="margin: 4px 0 0; color: #6b7280; font-size: 13px"></p>
+            <p id="callMeta" class="modal-meta"></p>
           </div>
-          <button class="ghost" id="closeCall">Закрыть</button>
+          <button class="icon-btn" id="closeCall" type="button" aria-label="Закрыть расшифровку">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
         </div>
-        <div id="callBody"></div>
+        <div id="callBody" class="transcript"></div>
       </div>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/static/app.js"></script>
   </body>
 </html>

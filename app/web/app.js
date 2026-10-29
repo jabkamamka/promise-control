@@ -29,6 +29,12 @@ const SOURCE_LABELS = {
   llm: "ИИ",
 };
 
+const ICON = {
+  phone: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.5h2.9l1.5 4-2 1.5a12.6 12.6 0 0 0 6 6l1.5-2 4 1.5v2.9a2 2 0 0 1-2.2 2A16.6 16.6 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2Z"/></svg>`,
+  check: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`,
+  alert: `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 21 20H3l9-15.5Z"/><path d="M12 10v4.5"/><path d="M12 17.6v.1"/></svg>`,
+};
+
 function toast(message, isError = false) {
   const el = $("toast");
   el.textContent = message;
@@ -124,19 +130,25 @@ async function loadCounts() {
 function statusChips(counts) {
   const items = [
     { key: "", title: "Все", count: counts?.[""] },
-    { key: "overdue", title: STATUS_LABELS.overdue, count: counts?.overdue },
-    { key: "not_fulfilled", title: STATUS_LABELS.not_fulfilled, count: counts?.not_fulfilled },
-    { key: "created", title: STATUS_LABELS.created, count: counts?.created },
-    { key: "in_progress", title: STATUS_LABELS.in_progress, count: counts?.in_progress },
-    { key: "done", title: STATUS_LABELS.done, count: counts?.done },
+    { key: "overdue", title: STATUS_LABELS.overdue, count: counts?.overdue, rank: 1 },
+    { key: "not_fulfilled", title: STATUS_LABELS.not_fulfilled, count: counts?.not_fulfilled, rank: 2 },
+    { key: "in_progress", title: STATUS_LABELS.in_progress, count: counts?.in_progress, rank: 3 },
+    { key: "created", title: STATUS_LABELS.created, count: counts?.created, rank: 4 },
+    { key: "done", title: STATUS_LABELS.done, count: counts?.done, rank: 5 },
   ];
   $("statusChips").innerHTML = items
-    .map(
-      (item) => `
-      <button class="chip ${state.status === item.key ? "active" : ""}" data-status="${item.key}">
-        ${item.title}${item.count != null ? `<span class="count">${item.count}</span>` : ""}
-      </button>`
-    )
+    .map((item) => {
+      const active = state.status === item.key;
+      const label = `${item.title}${item.rank ? `, ранг срочности ${item.rank}` : ""}${
+        item.count != null ? `, задач: ${item.count}` : ""
+      }`;
+      return `
+      <button type="button" class="chip ${active ? "active" : ""}" data-status="${item.key}" aria-pressed="${active}" aria-label="${esc(label)}">
+        ${item.rank ? `<span class="rank" aria-hidden="true">${item.rank}</span>` : ""}
+        <span class="chip-label">${item.title}</span>
+        ${item.count != null ? `<span class="count">${item.count}</span>` : ""}
+      </button>`;
+    })
     .join("");
   $("statusChips")
     .querySelectorAll(".chip")
@@ -147,6 +159,7 @@ function statusChips(counts) {
         refresh();
       })
     );
+  requestAnimationFrame(placeChipThumb);
 }
 
 async function loadTypes() {
@@ -161,17 +174,19 @@ async function loadTypes() {
     .map(
       (t) => `
       <div class="type-item">
-        <h3>
-          ${esc(t.title)}
-          <span class="badge ${t.is_builtin ? "created" : "type"}">${t.is_builtin ? "встроенный" : "свой"}</span>
-          <span class="badge">${t.tasks_count} задач</span>
-        </h3>
+        <div class="type-item-head">
+          <h3>${esc(t.title)}</h3>
+          <div class="type-badges">
+            <span class="badge ${t.is_builtin ? "created" : "type"}">${t.is_builtin ? "встроенный" : "свой"}</span>
+            <span class="badge neutral">${t.tasks_count} задач</span>
+          </div>
+        </div>
         <p>${esc(t.description || "Без описания")}</p>
         <div class="kw">${(t.keywords || []).map((k) => `<span>${esc(k)}</span>`).join("")}</div>
         ${
           t.is_builtin
             ? ""
-            : `<div style="margin-top:10px"><button class="ghost" data-delete-type="${esc(t.code)}">Удалить тип</button></div>`
+            : `<div class="type-actions"><button class="ghost danger-ghost" type="button" data-delete-type="${esc(t.code)}">Удалить тип</button></div>`
         }
       </div>`
     )
@@ -207,42 +222,56 @@ function taskCard(task) {
   return `
     <article class="task ${task.effective_status}">
       <div class="task-head">
-        <div>
-          <div class="task-title">${esc(task.title)}</div>
-          <div class="task-meta">
+        <div class="task-main">
+          <div class="task-kicker">
             <span class="badge type">${esc(task.promise_type_title || task.promise_type)}</span>
             <span class="badge ${task.effective_status}">${STATUS_LABELS[task.effective_status] || task.effective_status}</span>
-            <span class="due ${due.cls}">⏰ ${esc(due.text)}</span>
-            <span>оператор ${esc(task.operator_id ?? "—")}</span>
-            <button class="ghost" data-call="${esc(task.call_id)}" style="padding:2px 8px;font-size:12.5px">звонок</button>
+            ${task.object ? `<span class="task-object">${esc(task.object)}</span>` : ""}
+          </div>
+          <h3 class="task-title">${esc(task.title)}</h3>
+          <div class="task-sub">
+            <span class="meta-label">Оператор</span>
+            <span>${esc(task.operator_id ?? "—")}</span>
+            <span class="task-sub-sep" aria-hidden="true"></span>
+            <button class="text-btn" type="button" data-call="${esc(task.call_id)}">${ICON.phone} Исходный звонок</button>
           </div>
         </div>
-        <div class="task-actions">${actions.join("")}</div>
+        <div class="task-side">
+          <div class="due-card ${due.cls}">
+            <span class="due-label">Срок</span>
+            <span class="due ${due.cls}">${esc(due.text)}</span>
+          </div>
+          <div class="task-actions">${actions.join("")}</div>
+        </div>
       </div>
-      ${task.object ? `<div class="task-meta">Объект: <b>${esc(task.object)}</b></div>` : ""}
       <blockquote class="quote">${esc(task.quote)}</blockquote>
       ${
         task.verification_status
           ? `<div class="verification ${esc(task.verification_status)}">
-              <div class="verification-title">${
-                task.verification_status === "confirmed"
-                  ? "Клиент подтвердил исполнение"
-                  : "Клиент сообщил, что не исполнено"
+              <div class="verification-icon" aria-hidden="true">${
+                task.verification_status === "confirmed" ? ICON.check : ICON.alert
               }</div>
-              ${
-                task.verification_quote
-                  ? `<div class="verification-quote">«${esc(task.verification_quote)}»</div>`
-                  : ""
-              }
-              <div class="verification-meta">
-                <span>${
-                  task.verified_at ? `проверено ${dayFmt(task.verified_at)}, ${timeFmt(task.verified_at)}` : ""
-                }</span>
+              <div class="verification-body">
+                <div class="verification-title">${
+                  task.verification_status === "confirmed"
+                    ? "Клиент подтвердил исполнение"
+                    : "Клиент сообщил, что не исполнено"
+                }</div>
                 ${
-                  task.verified_call_id
-                    ? `<button class="ghost" data-call="${esc(task.verified_call_id)}">звонок-проверка</button>`
+                  task.verification_quote
+                    ? `<div class="verification-quote">«${esc(task.verification_quote)}»</div>`
                     : ""
                 }
+                <div class="verification-meta">
+                  <span>${
+                    task.verified_at ? `проверено ${dayFmt(task.verified_at)}, ${timeFmt(task.verified_at)}` : ""
+                  }</span>
+                  ${
+                    task.verified_call_id
+                      ? `<button class="text-btn" type="button" data-call="${esc(task.verified_call_id)}">${ICON.phone} Звонок-проверка</button>`
+                      : ""
+                  }
+                </div>
               </div>
             </div>`
           : ""
@@ -252,10 +281,10 @@ function taskCard(task) {
           ? `<ul class="actions-list">${task.actions.map((a) => `<li>${esc(a)}</li>`).join("")}</ul>`
           : ""
       }
-      <div class="task-meta" style="margin-top:8px">
-        <span>срок: ${esc(task.due_hint || task.deadline_source)}</span>
-        <span>уверенность ${Math.round((task.confidence || 0) * 100)}%</span>
-        <span>${esc(SOURCE_LABELS[task.matched_by] || task.matched_by)}</span>
+      <div class="task-foot">
+        <span class="task-foot-item"><span class="meta-label">Срок из фразы</span> ${esc(task.due_hint || task.deadline_source)}</span>
+        <span class="task-foot-item"><span class="meta-label">Уверенность</span> ${Math.round((task.confidence || 0) * 100)}%</span>
+        <span class="task-foot-item"><span class="meta-label">Источник</span> ${esc(SOURCE_LABELS[task.matched_by] || task.matched_by)}</span>
       </div>
     </article>`;
 }
@@ -274,11 +303,12 @@ async function loadTasks(append = false) {
   if (token !== state.loadToken) return;
 
   state.total = data.total;
+  setQueueCount(data.total);
   const html = data.items.map(taskCard).join("");
   if (append) {
     $("taskList").insertAdjacentHTML("beforeend", html);
   } else {
-    $("taskList").innerHTML = html || `<div class="empty">Задач нет. Проверьте фильтры или отправьте звонки на вебхук.</div>`;
+    $("taskList").innerHTML = html || `<div class="empty"><div class="empty-mark" aria-hidden="true">∅</div><p>Задач нет. Проверьте фильтры или отправьте звонки на вебхук.</p></div>`;
   }
   $("loadMoreWrap").classList.toggle("hidden", state.offset + data.items.length >= data.total);
 
@@ -308,7 +338,7 @@ async function changeStatus(taskId, status, button) {
 async function openCall(callId) {
   const modal = $("callModal");
   modal.classList.remove("hidden");
-  $("callBody").innerHTML = `<div class="empty">Загружаем расшифровку…</div>`;
+  $("callBody").innerHTML = `<div class="empty compact"><div class="empty-mark" aria-hidden="true">…</div><p>Загружаем расшифровку…</p></div>`;
   try {
     const call = await api(`/api/v1/calls/${callId}`);
     $("callTitle").textContent = `Звонок ${call.id}`;
@@ -332,7 +362,7 @@ async function openCall(callId) {
       )
       .join("");
   } catch (error) {
-    $("callBody").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+    $("callBody").innerHTML = `<div class="empty compact"><div class="empty-mark" aria-hidden="true">!</div><p>${esc(error.message)}</p></div>`;
   }
 }
 
@@ -401,7 +431,155 @@ $("typeForm").addEventListener("submit", async (event) => {
   }
 });
 
+/* ------------------------------ живой интерфейс ---------------------------- */
+
+const numberFmt = new Intl.NumberFormat("ru-RU");
+const statPrev = new Map();
+let lastSyncAt = 0;
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function setQueueCount(total) {
+  const el = $("queueCount");
+  if (el && Number.isFinite(Number(total))) el.textContent = numberFmt.format(total);
+}
+
+function placeChipThumb() {
+  const track = $("statusChips");
+  if (!track) return;
+  const chip = track.querySelector(".chip.active");
+  if (!chip) {
+    track.style.setProperty("--thumb-opacity", "0");
+    return;
+  }
+  const trackRect = track.getBoundingClientRect();
+  const chipRect = chip.getBoundingClientRect();
+  track.style.setProperty("--thumb-x", `${chipRect.left - trackRect.left - track.clientLeft}px`);
+  track.style.setProperty("--thumb-y", `${chipRect.top - trackRect.top - track.clientTop}px`);
+  track.style.setProperty("--thumb-w", `${chipRect.width}px`);
+  track.style.setProperty("--thumb-h", `${chipRect.height}px`);
+  track.style.setProperty("--thumb-opacity", "1");
+  if (!track.classList.contains("thumb-ready")) {
+    requestAnimationFrame(() => track.classList.add("thumb-ready"));
+  }
+}
+
+function animateStatValue(el, from, to) {
+  if (prefersReducedMotion() || from === to) {
+    el.textContent = numberFmt.format(to);
+    return;
+  }
+  const start = performance.now();
+  const duration = from === 0 ? 760 : 520;
+  const tick = (now) => {
+    const progress = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = numberFmt.format(Math.round(from + (to - from) * eased));
+    if (progress < 1 && el.isConnected) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function animateStats() {
+  document.querySelectorAll("#stats .stat").forEach((stat) => {
+    const value = stat.querySelector("b");
+    const label = stat.querySelector("span")?.textContent?.trim() || "";
+    const target = Number(String(value?.textContent || "").replace(/\s/g, ""));
+    if (!value || !Number.isFinite(target)) return;
+    const from = statPrev.has(label) ? statPrev.get(label) : 0;
+    statPrev.set(label, target);
+    animateStatValue(value, from, target);
+  });
+}
+
+function updateSyncAge() {
+  const el = $("syncAge");
+  if (!el) return;
+  if (!lastSyncAt) {
+    el.textContent = "синхронизация…";
+    return;
+  }
+  const seconds = Math.max(0, Math.floor((Date.now() - lastSyncAt) / 1000));
+  if (seconds < 4) el.textContent = "обновлено только что";
+  else if (seconds < 60) el.textContent = `обновлено ${seconds} с назад`;
+  else el.textContent = `обновлено ${Math.floor(seconds / 60)} мин назад`;
+}
+
+function initLiveUI() {
+  const stats = $("stats");
+  if (stats) {
+    new MutationObserver(() => {
+      lastSyncAt = Date.now();
+      updateSyncAge();
+      animateStats();
+    }).observe(stats, { childList: true });
+  }
+
+  const chips = $("statusChips");
+  if (chips) {
+    new ResizeObserver(() => requestAnimationFrame(placeChipThumb)).observe(chips);
+  }
+
+  const refreshButton = $("refresh");
+  refreshButton?.addEventListener("click", () => {
+    refreshButton.classList.remove("is-loading");
+    void refreshButton.offsetWidth;
+    refreshButton.classList.add("is-loading");
+    setTimeout(() => refreshButton.classList.remove("is-loading"), 900);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const typing =
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable);
+    const dialogOpen = !$("callModal").classList.contains("hidden") || $("typesDrawer").classList.contains("open");
+
+    if (event.key === "/" && !typing && !dialogOpen && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault();
+      $("search").focus();
+      $("search").select();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (!$("callModal").classList.contains("hidden")) {
+        $("closeCall").click();
+        return;
+      }
+      if ($("typesDrawer").classList.contains("open")) {
+        $("closeTypes").click();
+        return;
+      }
+      if (document.activeElement === $("search")) {
+        if ($("search").value) {
+          $("search").value = "";
+          $("search").dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        $("search").blur();
+      }
+    }
+  });
+
+  setInterval(updateSyncAge, 1000);
+}
+
+initLiveUI();
+
 /* ---------------------------------- старт --------------------------------- */
+
+// Переход на страницу аналитики.
+const analyticsButton = document.getElementById("openAnalytics");
+if (analyticsButton) {
+  analyticsButton.addEventListener("click", () => {
+    window.location.href = "/analytics";
+  });
+}
 
 (async function init() {
   await loadHealth();
