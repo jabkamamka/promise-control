@@ -14,8 +14,8 @@ python scripts\seed_demo.py
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
 ```
 
-`seed_demo.py` загружает 52 расшифровки (189 задач). Если нужен «чистый» прогон — удалите
-`data\promises.db` перед запуском и отправьте звонки через вебхук (шаг 1).
+`seed_demo.py` загружает 52 расшифровки из API как есть (189 задач). Если нужен живой приём —
+удалите `data\promises.db` и запустите `sender_windows_amd64.exe` (шаг 1).
 
 Открыть в браузере: **http://localhost:8080/**
 

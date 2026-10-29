@@ -158,12 +158,12 @@ curl -X PATCH http://localhost:8080/api/v1/tasks/tsk_xxxxxxxxxxxx -H "Content-Ty
 `GET /api/v1/tasks-export` (те же фильтры, что у `/api/v1/tasks`).
 
 ```powershell
-python scripts\seed_demo.py --spread 14 --progress --verification
+python scripts\seed_demo.py
 ```
 
-Такой запуск раскладывает звонки по последним двум неделям, закрывает часть задач и добавляет
-две пары звонков для проверки исполнения — страница аналитики сразу показывает живую картину.
-Без флагов `seed_demo.py` работает как раньше.
+Скрипт загружает сохранённую выборку из `data/sample_calls.json` **без изменений**: те же id,
+время, операторы и расшифровки, что отдал API. Живой приём проверяется программой-отправителем
+из кейса — `sender_windows_amd64.exe` (см. раздел «Быстрый старт»).
 
 ---
 
