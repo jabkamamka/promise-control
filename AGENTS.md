@@ -17,7 +17,7 @@
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
-python -m pytest                      # 62 теста должны быть зелёными
+python -m pytest                      # 65 тестов должны быть зелёными
 python -m uvicorn app.main:app --port 8080
 python scripts\seed_demo.py           # 52 демо-звонка, если нужна база с данными
 ```
