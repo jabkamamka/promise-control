@@ -16,6 +16,7 @@ const STATUS_LABELS = {
   in_progress: "В работе",
   done: "Выполнена",
   overdue: "Просрочена",
+  not_fulfilled: "Не выполнена",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -97,6 +98,7 @@ async function loadStats() {
     $("stats").innerHTML = `
       <div class="stat"><b>${stats.tasks_total}</b><span>задач</span></div>
       <div class="stat danger"><b>${stats.overdue}</b><span>просрочено</span></div>
+      <div class="stat danger"><b>${stats.not_fulfilled ?? 0}</b><span>не выполнено</span></div>
       <div class="stat"><b>${stats.calls_total}</b><span>звонков</span></div>
       <div class="stat ok"><b>${by.done ?? 0}</b><span>выполнено</span></div>
     `;
@@ -108,7 +110,7 @@ async function loadStats() {
 }
 
 async function loadCounts() {
-  const keys = ["", "overdue", "created", "in_progress", "done"];
+  const keys = ["", "overdue", "not_fulfilled", "created", "in_progress", "done"];
   const totals = await Promise.all(
     keys.map((key) =>
       api(`/api/v1/tasks?limit=1${key ? `&status=${key}` : ""}`)
@@ -123,6 +125,7 @@ function statusChips(counts) {
   const items = [
     { key: "", title: "Все", count: counts?.[""] },
     { key: "overdue", title: STATUS_LABELS.overdue, count: counts?.overdue },
+    { key: "not_fulfilled", title: STATUS_LABELS.not_fulfilled, count: counts?.not_fulfilled },
     { key: "created", title: STATUS_LABELS.created, count: counts?.created },
     { key: "in_progress", title: STATUS_LABELS.in_progress, count: counts?.in_progress },
     { key: "done", title: STATUS_LABELS.done, count: counts?.done },
@@ -218,6 +221,32 @@ function taskCard(task) {
       </div>
       ${task.object ? `<div class="task-meta">Объект: <b>${esc(task.object)}</b></div>` : ""}
       <blockquote class="quote">${esc(task.quote)}</blockquote>
+      ${
+        task.verification_status
+          ? `<div class="verification ${esc(task.verification_status)}">
+              <div class="verification-title">${
+                task.verification_status === "confirmed"
+                  ? "Клиент подтвердил исполнение"
+                  : "Клиент сообщил, что не исполнено"
+              }</div>
+              ${
+                task.verification_quote
+                  ? `<div class="verification-quote">«${esc(task.verification_quote)}»</div>`
+                  : ""
+              }
+              <div class="verification-meta">
+                <span>${
+                  task.verified_at ? `проверено ${dayFmt(task.verified_at)}, ${timeFmt(task.verified_at)}` : ""
+                }</span>
+                ${
+                  task.verified_call_id
+                    ? `<button class="ghost" data-call="${esc(task.verified_call_id)}">звонок-проверка</button>`
+                    : ""
+                }
+              </div>
+            </div>`
+          : ""
+      }
       ${
         (task.actions || []).length > 1
           ? `<ul class="actions-list">${task.actions.map((a) => `<li>${esc(a)}</li>`).join("")}</ul>`

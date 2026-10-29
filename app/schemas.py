@@ -39,6 +39,7 @@ class IngestCallResult(BaseModel):
     status: Literal["processed", "duplicate", "error"]
     tasks_created: int = 0
     promises_found: int = 0
+    tasks_verified: int = 0
     error: str | None = None
 
 
@@ -48,6 +49,7 @@ class IngestResponse(BaseModel):
     duplicates: int
     failed: int
     tasks_created: int
+    tasks_verified: int = 0
     calls: list[IngestCallResult]
 
 
@@ -75,6 +77,10 @@ class TaskOut(BaseModel):
     created_at: str
     updated_at: str
     closed_at: str | None = None
+    verification_status: str | None = None
+    verified_at: str | None = None
+    verified_call_id: str | None = None
+    verification_quote: str | None = None
     call_started_at: str | None = None
     call_ended_at: str | None = None
 
@@ -132,7 +138,9 @@ class StatsOut(BaseModel):
     tasks_total: int
     by_status: dict[str, int]
     by_type: dict[str, int]
+    by_verification: dict[str, int]
     overdue: int
+    not_fulfilled: int
     due_today: int
     avg_promises_per_call: float
 

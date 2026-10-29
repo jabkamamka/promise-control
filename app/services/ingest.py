@@ -14,6 +14,7 @@ from .deadline import get_tz, parse_deadline
 from .detect import DetectedPromise, call_end_for, detect_promises
 from .llm import detect_with_llm
 from .tasks import insert_task, load_types, mark_overdue, new_task_id
+from .verify import verify_phone
 
 
 def _merge_llm(
@@ -96,6 +97,7 @@ def process_call(conn: sqlite3.Connection, raw: dict[str, Any], types=None) -> d
             "status": "error",
             "tasks_created": 0,
             "promises_found": 0,
+            "tasks_verified": 0,
             "error": _short_validation_error(exc),
         }
 
@@ -106,6 +108,7 @@ def process_call(conn: sqlite3.Connection, raw: dict[str, Any], types=None) -> d
             "status": "duplicate",
             "tasks_created": 0,
             "promises_found": 0,
+            "tasks_verified": 0,
             "error": None,
         }
 
@@ -123,6 +126,7 @@ def process_call(conn: sqlite3.Connection, raw: dict[str, Any], types=None) -> d
 
     now = utc_now()
     created = 0
+    verified = 0
     try:
         conn.execute(
             """INSERT INTO calls (id, operator_id, client_phone, started_at, ended_at, transcript,
@@ -168,6 +172,7 @@ def process_call(conn: sqlite3.Connection, raw: dict[str, Any], types=None) -> d
                     },
                 )
             )
+        verified = verify_phone(conn, call.client_phone)
         conn.commit()
     except Exception as exc:  # pragma: no cover - защита от неожиданной ошибки БД
         conn.rollback()
@@ -176,6 +181,7 @@ def process_call(conn: sqlite3.Connection, raw: dict[str, Any], types=None) -> d
             "status": "error",
             "tasks_created": 0,
             "promises_found": len(promises),
+            "tasks_verified": 0,
             "error": f"Ошибка сохранения: {exc}",
         }
 
@@ -184,6 +190,7 @@ def process_call(conn: sqlite3.Connection, raw: dict[str, Any], types=None) -> d
         "status": "processed",
         "tasks_created": created,
         "promises_found": len(promises),
+        "tasks_verified": verified,
         "error": None,
     }
 
@@ -203,6 +210,7 @@ def ingest_payload(conn: sqlite3.Connection, payload: Any) -> dict[str, Any]:
         "duplicates": duplicates,
         "failed": failed,
         "tasks_created": sum(r["tasks_created"] for r in results),
+        "tasks_verified": sum(r.get("tasks_verified", 0) for r in results),
         "calls": results,
     }
 
@@ -254,8 +262,14 @@ def reanalyze_call(conn: sqlite3.Connection, call_id: str) -> dict[str, Any] | N
         "UPDATE calls SET promise_count = ?, processed_at = ? WHERE id = ?",
         (len(promises), utc_now(), call_id),
     )
+    verified = verify_phone(conn, row["client_phone"])
     conn.commit()
-    return {"call_id": call_id, "promises_found": len(promises), "tasks_created": created}
+    return {
+        "call_id": call_id,
+        "promises_found": len(promises),
+        "tasks_created": created,
+        "tasks_verified": verified,
+    }
 
 
 def _short_validation_error(exc: ValidationError) -> str:

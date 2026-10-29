@@ -16,6 +16,7 @@ STATUS_TITLES = {
     "in_progress": "В работе",
     "done": "Выполнена",
     "overdue": "Просрочена",
+    "not_fulfilled": "Не выполнена",
 }
 
 #: Разрешённые переходы. Просрочка — вычисляемый статус, а не хранимый.
@@ -123,7 +124,9 @@ def mark_overdue(conn: sqlite3.Connection) -> int:
     """Проставляет просрочку задачам с истёкшим сроком (идемпотентно)."""
     now = utc_now()
     rows = conn.execute(
-        "SELECT id FROM tasks WHERE status != 'done' AND due_at < ? AND overdue_marked_at IS NULL",
+        """SELECT id FROM tasks
+           WHERE status != 'done' AND verification_status IS NULL
+             AND due_at < ? AND overdue_marked_at IS NULL""",
         (now,),
     ).fetchall()
     for row in rows:
@@ -138,7 +141,7 @@ def mark_overdue(conn: sqlite3.Connection) -> int:
 
 
 def is_overdue(task: dict[str, Any], now: datetime | None = None) -> bool:
-    if task["status"] == "done":
+    if task["status"] == "done" or task.get("verification_status") == "refuted":
         return False
     due = parse_iso(task["due_at"])
     if not due:
@@ -147,6 +150,10 @@ def is_overdue(task: dict[str, Any], now: datetime | None = None) -> bool:
 
 
 def effective_status(task: dict[str, Any]) -> str:
+    if task["status"] == "done":
+        return "done"
+    if task.get("verification_status") == "refuted":
+        return "not_fulfilled"
     return "overdue" if is_overdue(task) else task["status"]
 
 
@@ -188,6 +195,7 @@ def _build_filters(
     due_before: str | None,
     due_after: str | None,
     q: str | None,
+    verification: str | None = None,
 ) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -199,15 +207,37 @@ def _build_filters(
         local_params: list[Any] = []
         for state in wanted:
             if state in ("created", "in_progress"):
-                # просроченная задача не должна выглядеть как «Создана»
-                parts.append("(t.status = ? AND t.due_at >= ?)")
+                # просроченная задача не должна выглядеть как «Создана»;
+                # опровергнутая обещанием не считается
+                parts.append(
+                    "(t.status = ? AND t.due_at >= ? AND "
+                    "(t.verification_status IS NULL OR t.verification_status != 'refuted'))"
+                )
                 local_params.extend([state, now])
             elif state == "done":
                 parts.append("t.status = ?")
                 local_params.append("done")
             elif state == "overdue":
-                parts.append("(t.status != 'done' AND t.due_at < ?)")
+                parts.append(
+                    "(t.status != 'done' AND t.due_at < ? AND "
+                    "(t.verification_status IS NULL OR t.verification_status != 'refuted'))"
+                )
                 local_params.append(now)
+            elif state == "not_fulfilled":
+                parts.append("(t.status != 'done' AND t.verification_status = 'refuted')")
+        if parts:
+            clauses.append("(" + " OR ".join(parts) + ")")
+            params.extend(local_params)
+    if verification:
+        wanted = [s.strip() for s in verification.split(",") if s.strip()]
+        parts = []
+        local_params = []
+        for state in wanted:
+            if state == "pending":
+                parts.append("t.verification_status IS NULL")
+            elif state in ("confirmed", "refuted"):
+                parts.append("t.verification_status = ?")
+                local_params.append(state)
         if parts:
             clauses.append("(" + " OR ".join(parts) + ")")
             params.extend(local_params)
@@ -243,11 +273,14 @@ def list_tasks(
     due_before: str | None = None,
     due_after: str | None = None,
     q: str | None = None,
+    verification: str | None = None,
     sort: str = "due_at",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
-    where, params = _build_filters(status, promise_type, operator_id, call_id, due_before, due_after, q)
+    where, params = _build_filters(
+        status, promise_type, operator_id, call_id, due_before, due_after, q, verification
+    )
 
     field = sort.lstrip("-")
     direction = "DESC" if sort.startswith("-") else "ASC"
@@ -370,12 +403,23 @@ def stats(conn: sqlite3.Connection) -> dict[str, Any]:
     by_type = {}
     for row in conn.execute("SELECT promise_type, COUNT(*) AS c FROM tasks GROUP BY promise_type"):
         by_type[row["promise_type"]] = row["c"]
+    by_verification = {"confirmed": 0, "refuted": 0, "pending": 0}
+    for row in conn.execute(
+        """SELECT COALESCE(verification_status, 'pending') AS state, COUNT(*) AS c
+           FROM tasks GROUP BY state"""
+    ):
+        by_verification[row["state"]] = row["c"]
     overdue = conn.execute(
-        "SELECT COUNT(*) AS c FROM tasks WHERE status != 'done' AND due_at < ?", (utc_now(),)
+        """SELECT COUNT(*) AS c FROM tasks
+           WHERE status != 'done' AND due_at < ?
+             AND (verification_status IS NULL OR verification_status != 'refuted')""",
+        (utc_now(),),
     ).fetchone()["c"]
     today = utc_now()[:10]
     due_today = conn.execute(
-        "SELECT COUNT(*) AS c FROM tasks WHERE status != 'done' AND due_at >= ? AND due_at < ?",
+        """SELECT COUNT(*) AS c FROM tasks
+           WHERE status != 'done' AND due_at >= ? AND due_at < ?
+             AND (verification_status IS NULL OR verification_status != 'refuted')""",
         (f"{today}T00:00:00Z", f"{today}T23:59:59Z"),
     ).fetchone()["c"]
     avg = round(tasks_total / calls_total, 2) if calls_total else 0.0
@@ -384,7 +428,9 @@ def stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "tasks_total": tasks_total,
         "by_status": by_status,
         "by_type": by_type,
+        "by_verification": by_verification,
         "overdue": overdue,
+        "not_fulfilled": by_verification["refuted"],
         "due_today": due_today,
         "avg_promises_per_call": avg,
     }

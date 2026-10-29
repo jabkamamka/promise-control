@@ -123,6 +123,7 @@ input[type="search"] { min-width: 260px; flex: 1 1 240px; }
   padding: 16px 18px;
 }
 .task.overdue { border-left-color: var(--danger); }
+.task.not_fulfilled { border-left-color: #991b1b; }
 .task.in_progress { border-left-color: #f59e0b; }
 .task.done { border-left-color: var(--ok); opacity: .82; }
 .task.created { border-left-color: #818cf8; }
@@ -139,6 +140,7 @@ input[type="search"] { min-width: 260px; flex: 1 1 240px; }
 }
 .badge.type { background: var(--accent-soft); color: #4338ca; }
 .badge.overdue { background: #fee2e2; color: #b91c1c; }
+.badge.not_fulfilled { background: #fecaca; color: #7f1d1d; }
 .badge.in_progress { background: #fef3c7; color: #92400e; }
 .badge.done { background: #dcfce7; color: #166534; }
 .badge.created { background: #e0e7ff; color: #3730a3; }
@@ -157,6 +159,25 @@ input[type="search"] { min-width: 260px; flex: 1 1 240px; }
 }
 .quote::before { content: "«"; color: var(--muted); }
 .quote::after { content: "»"; color: var(--muted); }
+
+.verification {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fafbff;
+}
+.verification.confirmed { border-color: #bbf7d0; background: #f0fdf4; }
+.verification.refuted { border-color: #fecaca; background: #fef2f2; }
+.verification-title { font-size: 13.5px; font-weight: 650; }
+.verification.confirmed .verification-title { color: #166534; }
+.verification.refuted .verification-title { color: #b91c1c; }
+.verification-quote { margin-top: 5px; color: #39404f; font-size: 13.5px; }
+.verification-meta {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 7px; color: var(--muted); font-size: 12.5px;
+}
+.verification-meta button { padding: 3px 10px; font-size: 12.5px; }
 
 .actions-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
 .actions-list li { margin: 2px 0; }

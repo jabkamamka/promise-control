@@ -134,6 +134,30 @@ Invoke-RestMethod http://localhost:8080/api/v1/stats | ConvertTo-Json -Depth 4
 
 **Что сказать:** «52 звонка → 189 задач, 3,6 обещания на звонок. Всё видно в `/api/v1/stats`».
 
+## 7. Проверка исполнения по следующим звонкам (40 секунд)
+
+Самый сильный момент: сервис сам понимает, выполнено ли обещание.
+
+```powershell
+$pairs = Get-Content data\sample_verification.json -Raw -Encoding UTF8 | ConvertFrom-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/webhook/calls `
+  -ContentType 'application/json' -Body ([System.Text.Encoding]::UTF8.GetBytes(($pairs | ConvertTo-Json -Depth 8)))
+
+Invoke-RestMethod "http://localhost:8080/api/v1/tasks?verification=confirmed" | Select-Object total
+Invoke-RestMethod "http://localhost:8080/api/v1/tasks?verification=refuted" | Select-Object total
+```
+
+Ожидаемо: `confirmed = 1` (клиент сказал «мне перезвонили» — задача закрыта),
+`refuted = 1` (клиент сказал «акт так и не пришёл» — статус «Не выполнено»).
+
+**Что сказать:** «Партнер просил не просто фиксировать обещание, а проверять его исполнение.
+Когда с того же номера приходит следующий звонок, сервис ищет в репликах клиента подтверждение
+или опровержение. Подтверждение закрывает задачу, опровержение помечает „не выполнено“,
+неясная реплика ничего не меняет».
+
+Детали: кнопка «звонок» в задаче показывает цитату клиента (`verification_quote`) и номер звонка,
+в котором она прозвучала.
+
 ## 7. Ограничения (30 секунд, обязательный пункт)
 
 Сказать честно:

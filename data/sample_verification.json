@@ -1,0 +1,94 @@
+[
+ {
+  "id": "demo-verify-callback-1",
+  "operator_id": 3,
+  "client_phone": "+79001110001",
+  "started_at": "2026-10-27T09:00:00Z",
+  "ended_at": "2026-10-27T09:04:00Z",
+  "transcript": [
+   {
+    "speaker": "operator",
+    "text": "Добрый день, компания «Сфера», оператор Сергей."
+   },
+   {
+    "speaker": "client",
+    "text": "Когда будет готов мой заказ?"
+   },
+   {
+    "speaker": "operator",
+    "text": "Перезвоню вам завтра в десять утра и скажу точные сроки."
+   },
+   {
+    "speaker": "client",
+    "text": "Хорошо, жду."
+   }
+  ]
+ },
+ {
+  "id": "demo-verify-callback-2",
+  "operator_id": 3,
+  "client_phone": "+79001110001",
+  "started_at": "2026-10-28T12:00:00Z",
+  "ended_at": "2026-10-28T12:03:00Z",
+  "transcript": [
+   {
+    "speaker": "operator",
+    "text": "Добрый день, компания «Сфера», оператор Сергей."
+   },
+   {
+    "speaker": "client",
+    "text": "Да, мне вчера перезвонили, всё рассказали. Спасибо."
+   },
+   {
+    "speaker": "operator",
+    "text": "Рад помочь, хорошего дня."
+   }
+  ]
+ },
+ {
+  "id": "demo-verify-docs-1",
+  "operator_id": 5,
+  "client_phone": "+79001110002",
+  "started_at": "2026-10-27T14:00:00Z",
+  "ended_at": "2026-10-27T14:05:00Z",
+  "transcript": [
+   {
+    "speaker": "operator",
+    "text": "Добрый день, компания «Вектор», оператор Мария."
+   },
+   {
+    "speaker": "client",
+    "text": "Для бухгалтерии нужен акт выполненных работ."
+   },
+   {
+    "speaker": "operator",
+    "text": "Выпишу акт и вышлю на электронную почту до пятницы."
+   },
+   {
+    "speaker": "client",
+    "text": "Спасибо."
+   }
+  ]
+ },
+ {
+  "id": "demo-verify-docs-2",
+  "operator_id": 5,
+  "client_phone": "+79001110002",
+  "started_at": "2026-10-31T10:00:00Z",
+  "ended_at": "2026-10-31T10:04:00Z",
+  "transcript": [
+   {
+    "speaker": "operator",
+    "text": "Добрый день, компания «Вектор», оператор Мария."
+   },
+   {
+    "speaker": "client",
+    "text": "Акт так и не пришёл, мы уже отправили жалобу."
+   },
+   {
+    "speaker": "operator",
+    "text": "Приношу извинения, отправлю сегодня повторно."
+   }
+  ]
+ }
+]

@@ -221,7 +221,9 @@ def _custom_candidates(clause: str, custom_types: list[PromiseType]) -> list[Pro
         if not verb_match:
             continue
         verb = _VERB_BY_FORM[verb_match.group(1).lower()]
-        priority = ptype.priority + min(kw_hits, 3) * 4 + (2 if overlap >= 0.34 else 0)
+        # Пользовательский тип важнее встроенных: его добавили осознанно,
+        # чтобы он ловил именно эту формулировку.
+        priority = 92 + min(kw_hits, 3) * 2 + (2 if overlap >= 0.34 else 0)
         found.append(
             PromiseCandidate(
                 type_code=ptype.code,

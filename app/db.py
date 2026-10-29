@@ -9,7 +9,7 @@ from .config import settings
 from .services.taxonomy import BUILTIN_TYPES
 from .utils import utc_now
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at       TEXT NOT NULL,
     closed_at        TEXT,
     overdue_marked_at TEXT,
+    verification_status TEXT,
+    verified_at      TEXT,
+    verified_call_id TEXT,
+    verification_quote TEXT,
     dedupe_key       TEXT NOT NULL UNIQUE
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_call     ON tasks(call_id);
@@ -69,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status   ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due      ON tasks(due_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_operator ON tasks(operator_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_type     ON tasks(promise_type);
+CREATE INDEX IF NOT EXISTS idx_tasks_verification ON tasks(verification_status);
 CREATE TABLE IF NOT EXISTS task_events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -86,6 +91,25 @@ def _db_path() -> str:
     return settings.database_path
 
 
+_VERIFICATION_COLUMNS = (
+    "verification_status TEXT",
+    "verified_at TEXT",
+    "verified_call_id TEXT",
+    "verification_quote TEXT",
+)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Доводит существующую БД до текущей версии схемы."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(tasks)")}
+    if not columns:
+        return
+    for definition in _VERIFICATION_COLUMNS:
+        name = definition.split()[0]
+        if name not in columns:
+            conn.execute(f"ALTER TABLE tasks ADD COLUMN {definition}")
+
+
 def connect() -> sqlite3.Connection:
     path = _db_path()
     if path != ":memory:":
@@ -101,6 +125,7 @@ def connect() -> sqlite3.Connection:
 def init_db() -> None:
     """Создаёт схему и наполняет справочник типов обещаний."""
     with connect() as conn:
+        _migrate(conn)
         conn.executescript(SCHEMA)
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         now = utc_now()

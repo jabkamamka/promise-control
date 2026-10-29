@@ -61,6 +61,15 @@ def extra_calls():
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@pytest.fixture()
+def verification_calls():
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "data" / "sample_verification.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def make_call(call_id="call-1", transcript=None, ended_at="2026-10-29T10:00:00Z", operator_id=7):
     return {
         "id": call_id,

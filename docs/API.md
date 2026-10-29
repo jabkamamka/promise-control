@@ -83,6 +83,7 @@
 | `due_before` | ISO | Срок не позже указанного времени |
 | `due_after` | ISO | Срок не раньше указанного времени |
 | `q` | строка | Поиск по названию, цитате, объекту и действиям (регистр и ё/е не важны) |
+| `verification` | строка | `confirmed`, `refuted`, `pending` — результат проверки исполнения по следующим звонкам |
 | `sort` | строка | `due_at` (по умолчанию), `-due_at`, `created_at`, `-updated_at`, `status`, `confidence` |
 | `limit` | int | 1–200, по умолчанию 50 |
 | `offset` | int | Смещение, по умолчанию 0 |
@@ -116,6 +117,10 @@
       "is_overdue": true,
       "confidence": 0.9,
       "matched_by": "rule",
+      "verification_status": null,
+      "verified_at": null,
+      "verified_call_id": null,
+      "verification_quote": null,
       "created_at": "2026-10-29T10:57:32Z",
       "updated_at": "2026-10-29T10:57:32Z",
       "closed_at": null,
@@ -225,7 +230,8 @@
 
 1. ключевые слова ищутся в реплике оператора как подстроки (стемы: `скидк` найдёт «скидку»);
 2. дополнительно считается пересечение слов реплики с описанием и примерами;
-3. если тип сработал и его приоритет выше встроенного — задача получит этот тип;
+3. **свой тип важнее встроенных**: если он сработал, задача получит его код
+   (`matched_by = custom-rule`), потому что тип добавили осознанно;
 4. новые типы применяются к новым звонкам; для старых есть `POST /api/v1/calls/{id}/reanalyze`.
 
 ## DELETE /api/v1/promise-types/{code}
@@ -263,7 +269,9 @@
   "by_type": { "clarification": 66, "documents": 58, "callback": 37, "fix": 19 },
   "overdue": 17,
   "due_today": 61,
-  "avg_promises_per_call": 3.63
+  "avg_promises_per_call": 3.63,
+  "by_verification": { "confirmed": 0, "refuted": 0, "pending": 189 },
+  "not_fulfilled": 0
 }
 ```
 

@@ -21,8 +21,14 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 @router.get("", response_model=TaskList, summary="Список задач с фильтрами")
 def tasks_list(
-    status: str | None = Query(default=None, description="created,in_progress,done,overdue (можно несколько)"),
+    status: str | None = Query(
+        default=None,
+        description="created,in_progress,done,overdue,not_fulfilled (можно несколько)",
+    ),
     promise_type: str | None = Query(default=None, alias="type"),
+    verification: str | None = Query(
+        default=None, description="confirmed,refuted,pending (можно несколько)"
+    ),
     operator_id: int | None = None,
     call_id: str | None = None,
     due_before: str | None = Query(default=None, description="ISO-8601, включительно"),
@@ -43,6 +49,7 @@ def tasks_list(
         due_before=due_before,
         due_after=due_after,
         q=q,
+        verification=verification,
         sort=sort,
         limit=limit,
         offset=offset,
