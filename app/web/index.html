@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Сервис контроля обещаний</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">✓</div>
+        <div>
+          <h1>Контроль обещаний</h1>
+          <p>Задачи операторов, найденные в расшифровках звонков</p>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+    </header>
+
+    <main>
+      <section class="toolbar">
+        <div class="chips" id="statusChips"></div>
+        <select id="typeFilter" aria-label="Тип обещания"></select>
+        <input id="search" type="search" placeholder="Поиск по задаче, цитате или объекту" />
+        <button id="refresh">Обновить</button>
+        <button id="openTypes" class="ghost">Типы обещаний</button>
+      </section>
+
+      <section id="taskList" class="task-list"></section>
+      <div class="load-more" id="loadMoreWrap">
+        <button id="loadMore">Показать ещё</button>
+      </div>
+    </main>
+
+    <aside class="drawer" id="typesDrawer" aria-hidden="true">
+      <div class="drawer-head">
+        <h2>Типы обещаний</h2>
+        <button class="ghost" id="closeTypes">Закрыть</button>
+      </div>
+      <div id="typesList"></div>
+
+      <h3 style="margin: 22px 0 10px">Добавить свой тип</h3>
+      <form id="typeForm">
+        <div class="form-row">
+          <label for="tTitle">Название</label>
+          <input id="tTitle" required minlength="3" placeholder="Например: Согласовать скидку" />
+        </div>
+        <div class="form-row">
+          <label for="tDescription">Смысловое описание (что именно обещает оператор)</label>
+          <textarea id="tDescription" placeholder="Оператор обещает согласовать скидку с руководителем и вернуться с ответом"></textarea>
+        </div>
+        <div class="form-row">
+          <label for="tKeywords">Ключевые слова через запятую</label>
+          <input id="tKeywords" placeholder="скидк, согласую" />
+        </div>
+        <div class="form-row">
+          <label for="tExamples">Примеры реплик (по одному в строке)</label>
+          <textarea id="tExamples" placeholder="Согласую скидку и перезвоню завтра"></textarea>
+        </div>
+        <button class="primary" type="submit">Добавить тип</button>
+      </form>
+    </aside>
+
+    <div class="modal hidden" id="callModal">
+      <div class="modal-box">
+        <div class="modal-head">
+          <div>
+            <h2 id="callTitle">Звонок</h2>
+            <p id="callMeta" style="margin: 4px 0 0; color: #6b7280; font-size: 13px"></p>
+          </div>
+          <button class="ghost" id="closeCall">Закрыть</button>
+        </div>
+        <div id="callBody"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

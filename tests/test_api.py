@@ -1,182 +1,206 @@
-"""Сквозные тесты API: приём звонков, задачи, статусы, фильтры, новые типы.
+"""Сквозные тесты API: вебхук → задачи → статусы → фильтры."""
+from __future__ import annotations
 
-Время звонков считается от текущего момента, иначе тесты начнут падать,
-когда «сегодняшние» звонки из фикстуры окажутся в прошлом.
-"""
+import datetime as dt
 
-from datetime import datetime, timedelta, timezone
+from conftest import make_call
 
-
-def make_call(call_id: str = "call-001", operator: str = "op-1",
-              minutes_ago: int = 2, transcript: list[dict] | None = None) -> dict:
-    end = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
-    start = end - timedelta(minutes=2)
-    return {
-        "id": call_id,
-        "operator_id": operator,
-        "phone": "+7 900 000-00-01",
-        "started_at": start.isoformat(timespec="seconds"),
-        "ended_at": end.isoformat(timespec="seconds"),
-        "transcript": transcript or [
-            {"role": "operator", "text": "Добрый день, это Анна из УралМикро."},
-            {"role": "client", "text": "Здравствуйте, хочу уточнить по счёту."},
-            {"role": "operator", "text": "Я перезвоню вам через час и отправлю договор на почту."},
-        ],
-    }
+CALLBACK = [{"speaker": "operator", "text": "Перезвоню вам завтра в десять утра."}]
+DOCS = [{"speaker": "operator", "text": "Отправлю счёт на почту сегодня."}]
 
 
-def make_old_call() -> dict:
-    return make_call(
-        call_id="call-old",
-        operator="op-2",
-        minutes_ago=60 * 48,
-        transcript=[{
-            "role": "operator",
-            "text": "Уточню информацию и вернусь с ответом до конца дня.",
-        }],
-    )
-
-
-def test_webhook_creates_tasks_and_is_idempotent(client):
-    response = client.post("/webhook/calls", json=[make_call()])
+def test_webhook_batch_creates_tasks(client):
+    payload = [
+        make_call("c-1", CALLBACK),
+        make_call("c-2", DOCS, operator_id=8),
+    ]
+    response = client.post("/webhook/calls", json=payload)
     assert response.status_code == 200
     body = response.json()
-    assert body["accepted"] == 1
+    assert body["received"] == 2
+    assert body["processed"] == 2
     assert body["tasks_created"] == 2
 
-    again = client.post("/webhook/calls", json=[make_call()]).json()
-    assert again["duplicates"] == 1
-    assert again["tasks_created"] == 0
-
-    tasks = client.get("/tasks").json()
+    tasks = client.get("/api/v1/tasks").json()
     assert tasks["total"] == 2
+    assert {t["call_id"] for t in tasks["items"]} == {"c-1", "c-2"}
 
 
-def test_filters_and_status_flow(client):
-    call = make_call()
-    client.post("/webhook/calls", json=[call])
-    tasks = client.get("/tasks", params={"operator_id": "op-1", "status": "created"}).json()["items"]
-    assert len(tasks) == 2
+def test_webhook_is_idempotent(client):
+    payload = [make_call("c-1", CALLBACK)]
+    first = client.post("/webhook/calls", json=payload).json()
+    second = client.post("/webhook/calls", json=payload).json()
 
-    task_id = tasks[0]["id"]
-    started = client.patch(f"/tasks/{task_id}/status", json={"status": "in_progress", "note": "Взял в работу"})
-    assert started.status_code == 200
-    assert started.json()["status"] == "in_progress"
-
-    done = client.patch(f"/tasks/{task_id}/status", json={"status": "done"})
-    assert done.json()["status"] == "done"
-
-    history = client.get(f"/tasks/{task_id}").json()["events"]
-    assert [e["to_status"] for e in history] == ["created", "in_progress", "done"]
+    assert first["tasks_created"] == 1
+    assert second["duplicates"] == 1
+    assert second["tasks_created"] == 0
+    assert client.get("/api/v1/tasks").json()["total"] == 1
 
 
-def test_overdue_is_set_automatically(client):
-    client.post("/webhook/calls", json=[make_old_call()])
-    items = client.get("/tasks", params={"operator_id": "op-2"}).json()["items"]
-    assert items and items[0]["status"] == "overdue"
-    assert items[0]["status_label"] == "Просрочена"
+def test_webhook_accepts_single_call_and_wrapper(client):
+    single = client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
+    assert single.status_code == 200 and single.json()["processed"] == 1
+
+    wrapped = client.post("/webhook/calls", json={"calls": [make_call("c-2", DOCS)]})
+    assert wrapped.status_code == 200 and wrapped.json()["processed"] == 1
 
 
-def test_manual_overdue_is_rejected(client):
-    client.post("/webhook/calls", json=[make_call()])
-    task_id = client.get("/tasks").json()["items"][0]["id"]
-    response = client.patch(f"/tasks/{task_id}/status", json={"status": "overdue"})
+def test_webhook_rejects_unknown_shape(client):
+    assert client.post("/webhook/calls", json={"foo": 1}).status_code == 400
+
+
+def test_broken_call_does_not_break_batch(client):
+    payload = [make_call("c-1", CALLBACK), {"operator_id": 1, "transcript": []}]
+    body = client.post("/webhook/calls", json=payload).json()
+    assert body["processed"] == 1
+    assert body["failed"] == 1
+    assert body["calls"][1]["status"] == "error"
+
+
+def test_status_flow_and_events(client):
+    client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
+    task = client.get("/api/v1/tasks").json()["items"][0]
+    task_id = task["id"]
+    assert task["status"] == "created"
+    assert task["effective_status"] == "created"
+
+    in_progress = client.patch(f"/api/v1/tasks/{task_id}", json={"status": "in_progress"})
+    assert in_progress.status_code == 200
+    assert in_progress.json()["status"] == "in_progress"
+
+    done = client.patch(f"/api/v1/tasks/{task_id}", json={"status": "done", "comment": "Перезвонил"})
+    assert done.status_code == 200
+    assert done.json()["closed_at"] is not None
+
+    events = client.get(f"/api/v1/tasks/{task_id}/events").json()
+    assert [e["to_status"] for e in events] == ["created", "in_progress", "done"]
+    assert events[-1]["comment"] == "Перезвонил"
+
+
+def test_invalid_transition_is_rejected(client):
+    client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
+    task_id = client.get("/api/v1/tasks").json()["items"][0]["id"]
+
+    response = client.patch(f"/api/v1/tasks/{task_id}", json={"status": "done"})
     assert response.status_code == 409
+    assert "запрещён" in response.json()["detail"]
 
 
-def test_done_is_idempotent(client):
-    client.post("/webhook/calls", json=[make_call()])
-    task_id = client.get("/tasks").json()["items"][0]["id"]
-    client.patch(f"/tasks/{task_id}/status", json={"status": "done"})
-    response = client.patch(f"/tasks/{task_id}/status", json={"status": "done"})
-    assert response.status_code == 200
+def test_unknown_task_returns_404(client):
+    assert client.get("/api/v1/tasks/nope").status_code == 404
+    assert client.patch("/api/v1/tasks/nope", json={"status": "in_progress"}).status_code == 404
 
 
-def test_new_promise_type_by_semantic_description(client):
-    created = client.post("/promise-types", json={
-        "name": "Переключить на отдел",
-        "description": "Оператор обещает соединить клиента с профильным специалистом.",
-        "keywords": ["переключу", "соединю"],
-        "action": "Соединить клиента со специалистом",
-    })
+def test_filters_by_type_operator_and_text(client):
+    client.post(
+        "/webhook/calls",
+        json=[
+            make_call("c-1", CALLBACK, operator_id=10),
+            make_call("c-2", DOCS, operator_id=11),
+        ],
+    )
+    by_type = client.get("/api/v1/tasks?type=documents").json()
+    assert by_type["total"] == 1
+    assert by_type["items"][0]["call_id"] == "c-2"
+
+    by_operator = client.get("/api/v1/tasks?operator_id=10").json()
+    assert by_operator["total"] == 1
+    assert by_operator["items"][0]["call_id"] == "c-1"
+
+    by_text = client.get("/api/v1/tasks?q=счёт").json()
+    assert by_text["total"] == 1
+
+
+def test_overdue_is_computed_and_logged(client):
+    old_end = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    call = make_call(
+        "c-old",
+        [{"speaker": "operator", "text": "Перезвоню вам через час."}],
+        ended_at=old_end,
+    )
+    client.post("/webhook/calls", json=[call])
+
+    overdue = client.get("/api/v1/tasks?status=overdue").json()
+    assert overdue["total"] == 1
+    task = overdue["items"][0]
+    assert task["effective_status"] == "overdue"
+    assert task["is_overdue"] is True
+
+    events = client.get(f"/api/v1/tasks/{task['id']}/events").json()
+    assert any(e["event"] == "overdue" for e in events)
+
+    assert client.get("/api/v1/tasks?status=created").json()["total"] == 0
+
+
+def test_deadline_filters(client):
+    client.post("/webhook/calls", json=[make_call("c-1", CALLBACK)])
+    future = "2026-12-31T00:00:00Z"
+    assert client.get(f"/api/v1/tasks?due_before={future}").json()["total"] == 1
+    assert client.get("/api/v1/tasks?due_before=2020-01-01T00:00:00Z").json()["total"] == 0
+
+
+def test_types_crud(client):
+    types = client.get("/api/v1/promise-types").json()
+    assert len(types) == 7
+    assert {t["code"] for t in types} >= {"callback", "documents", "clarification"}
+
+    created = client.post(
+        "/api/v1/promise-types",
+        json={
+            "title": "Согласовать скидку",
+            "description": "Оператор обещает согласовать скидку с руководителем и вернуться",
+            "keywords": ["скидк", "согласую"],
+            "examples": ["Согласую скидку и перезвоню"],
+        },
+    )
     assert created.status_code == 201
     code = created.json()["code"]
+    assert code == "soglasovat-skidku"
 
-    call = make_call("call-002", transcript=[
-        {"role": "operator", "text": "Сейчас переключу вас на отдел продаж."},
-    ])
-    client.post("/webhook/calls", json=[call])
-    items = client.get("/tasks", params={"type_code": code}).json()
-    assert items["total"] == 1
+    duplicate = client.post("/api/v1/promise-types", json={"code": code, "title": "Дубль"})
+    assert duplicate.status_code == 409
+
+    assert client.delete(f"/api/v1/promise-types/{code}").status_code == 204
+    assert client.delete("/api/v1/promise-types/callback").status_code == 409
 
 
-def test_stats(client):
-    client.post("/webhook/calls", json=[make_call(), make_old_call()])
-    stats = client.get("/stats").json()
+def test_reanalyze_is_idempotent(client):
+    client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
+    before = client.get("/api/v1/tasks").json()["total"]
+    result = client.post("/api/v1/calls/c-1/reanalyze").json()
+    assert result["tasks_created"] == 0
+    assert client.get("/api/v1/tasks").json()["total"] == before
+    assert client.post("/api/v1/calls/unknown/reanalyze").status_code == 404
+
+
+def test_call_detail_contains_transcript_and_tasks(client):
+    client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
+    call = client.get("/api/v1/calls/c-1").json()
+    assert call["promise_count"] == 1
+    assert len(call["transcript"]) == 1
+    assert len(call["tasks"]) == 1
+    assert call["tasks"][0]["promise_type"] == "callback"
+
+
+def test_compat_aliases(client):
+    alias = client.post("/calls", json=make_call("c-alias", CALLBACK))
+    assert alias.status_code == 200
+    assert alias.json()["processed"] == 1
+
+    task_id = client.get("/api/v1/tasks").json()["items"][0]["id"]
+    moved = client.patch(f"/api/v1/tasks/{task_id}/status", json={"status": "in_progress"})
+    assert moved.status_code == 200
+    assert moved.json()["status"] == "in_progress"
+
+
+def test_stats_and_health(client):
+    client.post("/webhook/calls", json=[make_call("c-1", CALLBACK), make_call("c-2", DOCS)])
+    stats = client.get("/api/v1/stats").json()
     assert stats["calls_total"] == 2
-    assert stats["tasks_total"] == 3
-    assert stats["by_status"]["Просрочена"] == 1
+    assert stats["tasks_total"] == 2
+    assert stats["by_status"]["created"] == 2
+    assert stats["by_type"]["callback"] == 1
 
-
-def test_bad_payload(client):
-    assert client.post("/webhook/calls", json={"foo": "bar"}).status_code == 422
-    response = client.post("/webhook/calls", json=[{"operator_id": "x"}])
-    assert response.status_code == 200
-    assert response.json()["errors"]
-
-
-def test_overdue_filter_matches_status(client):
-    client.post("/webhook/calls", json=[make_old_call()])
-    by_status = client.get("/tasks", params={"status": "overdue"}).json()["total"]
-    by_flag = client.get("/tasks", params={"overdue": "true"}).json()["total"]
-    assert by_status == by_flag == 1
-
-
-def test_overdue_reopen_requires_new_due(client):
-    client.post("/webhook/calls", json=[make_old_call()])
-    task = client.get("/tasks", params={"status": "overdue"}).json()["items"][0]
-
-    without_due = client.patch(f"/tasks/{task['id']}/status", json={"status": "in_progress"})
-    assert without_due.status_code == 422
-
-    future = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
-    reopened = client.patch(f"/tasks/{task['id']}/status",
-                            json={"status": "in_progress", "due_at": future})
-    assert reopened.status_code == 200
-    assert reopened.json()["status"] == "in_progress"
-    assert reopened.json()["due_source"] == "manual"
-
-    # Повторное чтение не возвращает задачу в просроченные.
-    again = client.get(f"/tasks/{task['id']}").json()
-    assert again["status"] == "in_progress"
-
-
-def test_new_type_without_keywords_is_rejected(client):
-    response = client.post("/promise-types", json={
-        "name": "Обещание без опорных слов",
-        "description": "Оператор обещает перезвонить клиенту.",
-    })
-    assert response.status_code == 422
-
-
-def test_naive_time_is_local_not_utc(client):
-    """Дата без пояса — это время контакт-центра (PROMISE_TZ), а не UTC."""
-    from zoneinfo import ZoneInfo
-
-    from app import config
-
-    tz = ZoneInfo(config.DEFAULT_TZ)
-    end_local = (datetime.now(timezone.utc) - timedelta(minutes=5)).astimezone(tz)
-    payload = {
-        "id": "call-tz",
-        "operator_id": "op-3",
-        "started_at": (end_local - timedelta(minutes=6)).replace(tzinfo=None).isoformat(timespec="seconds"),
-        "ended_at": end_local.replace(tzinfo=None).isoformat(timespec="seconds"),
-        "transcript": [{"role": "operator", "text": "Перезвоню завтра в 10:00."}],
-    }
-    client.post("/webhook/calls", json=[payload])
-
-    expected = (end_local.replace(hour=10, minute=0, second=0, microsecond=0)
-                + timedelta(days=1)).astimezone(timezone.utc)
-    task = client.get("/tasks", params={"call_id": "call-tz"}).json()["items"][0]
-    assert task["due_at"] == expected.strftime("%Y-%m-%dT%H:%M:%SZ")
+    health = client.get("/health").json()
+    assert health["status"] == "ok"
+    assert health["types"] == 7
