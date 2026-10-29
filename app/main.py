@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import calls, system, tasks, types
+from .api import analytics, calls, system, tasks, types
 from .config import settings
 from .db import init_db
 
@@ -46,6 +46,7 @@ app.include_router(calls.router)
 app.include_router(tasks.router)
 app.include_router(types.router)
 app.include_router(system.router)
+app.include_router(analytics.router)
 
 if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
@@ -54,3 +55,9 @@ if WEB_DIR.exists():
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/analytics", include_in_schema=False)
+def analytics_page() -> FileResponse:
+    """Отдельная страница аналитики: не трогает основной интерфейс."""
+    return FileResponse(WEB_DIR / "analytics.html")

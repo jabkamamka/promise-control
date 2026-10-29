@@ -17,7 +17,7 @@
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
-python -m pytest                      # 78 тестов должны быть зелёными
+python -m pytest                      # 85 тестов должны быть зелёными
 python -m uvicorn app.main:app --port 8080
 python scripts\seed_demo.py           # 52 демо-звонка, если нужна база с данными
 ```
@@ -32,6 +32,9 @@ python scripts\seed_demo.py           # 52 демо-звонка, если ну�
 | `app/services/ingest.py` | Приём звонков, идемпотентность | `dedupe_key`, формат ответа вебхука |
 | `app/services/tasks.py` | Выборка, статусы, просрочка, статистика | `TRANSITIONS`, вычисление `effective_status` |
 | `app/services/verify.py` | Проверка исполнения по следующим звонкам клиента | Набор правил `_EVIDENCE`, не расширять без тестов |
+| `app/services/analytics.py` | Агрегаты для страницы аналитики | Окно дат вокруг сегодняшнего дня |
+| `app/services/export.py` | Выгрузка задач в CSV | Разделитель `;`, BOM для Excel |
+| `app/services/demo.py` | Демо-прогресс (только `seed_demo.py --progress`) | В основной путь не подключать |
 | `app/api/*.py` | HTTP-слой | Пути и поля ответов из `docs/API.md` |
 | `app/db.py` | Схема SQLite | Имена таблиц и колонок |
 

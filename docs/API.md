@@ -259,6 +259,42 @@
 
 ---
 
+## GET /api/v1/analytics
+
+Сводка для руководителя смены. Параметр `days` (1–90, по умолчанию 14) задаёт окно графика:
+оно центрируется вокруг сегодняшнего дня, чтобы были видны и прошедшие, и предстоящие сроки.
+
+```json
+{
+  "generated_at": "2026-10-29T13:18:41Z",
+  "timezone": "Asia/Yekaterinburg",
+  "period_days": 14,
+  "totals": { "calls": 56, "tasks": 192, "closed": 123, "overdue": 56, "open": 69,
+              "not_fulfilled": 1, "due_today": 6, "overdue_share": 29.2, "closed_share": 64.1 },
+  "by_status": { "created": 12, "in_progress": 57, "done": 123 },
+  "by_verification": { "pending": 190, "confirmed": 1, "refuted": 1 },
+  "by_type": [{ "code": "clarification", "title": "Уточнить информацию и вернуться с ответом", "count": 66 }],
+  "series": [{ "date": "2026-10-29", "weekday": 4, "created": 0, "closed": 2, "due": 6 }],
+  "operators": [{ "operator_id": 13, "open": 15, "overdue": 13, "done": 20 }],
+  "close_time": { "closed_count": 123, "avg_hours": 5.3, "median_hours": 4.7 }
+}
+```
+
+`series[].due` — открытые задачи, у которых срок попадает на этот день; `closed` — закрытые в этот день.
+
+## GET /api/v1/tasks-export
+
+Выгрузка задач в CSV для Excel. Принимает те же фильтры, что `GET /api/v1/tasks`
+(`status`, `type`, `operator_id`, `call_id`, `due_before`, `due_after`, `q`, `verification`, `sort`).
+
+Ответ: `text/csv; charset=utf-8`, разделитель `;`, BOM в начале, заголовок
+`Content-Disposition: attachment`. Колонки: ID, даты, статусы, тип, задача, объект, цитата оператора,
+оператор, звонок, результат проверки, цитата клиента, уверенность, источник.
+
+```powershell
+Invoke-WebRequest "http://localhost:8080/api/v1/tasks-export?status=overdue" -OutFile overdue.csv
+```
+
 ## GET /api/v1/stats
 
 ```json

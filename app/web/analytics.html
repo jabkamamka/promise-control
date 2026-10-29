@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Аналитика обещаний — панель руководителя</title>
+    <link rel="stylesheet" href="/static/analytics.css" />
+  </head>
+  <body class="an-body">
+    <header class="an-header">
+      <div class="an-brand">
+        <div class="an-mark">✓</div>
+        <div>
+          <h1>Аналитика обещаний</h1>
+          <p>Сводка для руководителя смены: нагрузка, просрочка, исполнение</p>
+        </div>
+      </div>
+      <div class="an-actions">
+        <button id="period7">7 дней</button>
+        <button id="period14" class="primary">14 дней</button>
+        <button id="period30">30 дней</button>
+        <button id="refresh">Обновить</button>
+        <a id="exportCsv" class="primary" href="/api/v1/tasks-export">Экспорт CSV</a>
+        <a href="/">К задачам</a>
+      </div>
+    </header>
+
+    <main class="an-main">
+      <div id="error" class="an-error" hidden></div>
+      <section class="an-kpis" id="kpis">
+        <div class="an-kpi"><b>—</b><span>загрузка…</span></div>
+      </section>
+
+      <div class="an-grid">
+        <section class="an-card">
+          <h2>Сроки и выполнение по дням</h2>
+          <p class="an-sub" id="chartSub">Сколько обещаний истекает в каждый день и сколько закрыто</p>
+          <div class="an-legend">
+            <span><i style="background:#4f46e5"></i>срок (открытые)</span>
+            <span><i style="background:#0f9d58"></i>выполнено</span>
+          </div>
+          <svg class="an-chart" id="chart" viewBox="0 0 760 260" role="img" aria-label="График созданных и закрытых задач по дням"></svg>
+        </section>
+
+        <section class="an-card">
+          <h2>Проверка исполнения</h2>
+          <p class="an-sub">По словам клиента в следующих звонках</p>
+          <div class="an-verify" id="verify"></div>
+          <h2 style="margin-top:22px">Сроки закрытия</h2>
+          <p class="an-sub">От создания задачи до «Выполнена»</p>
+          <div class="an-verify" id="closeTime"></div>
+        </section>
+      </div>
+
+      <div class="an-grid">
+        <section class="an-card">
+          <h2>Типы обещаний</h2>
+          <p class="an-sub">Сколько задач каждого типа создал детектор</p>
+          <div id="types"></div>
+        </section>
+
+        <section class="an-card">
+          <h2>Операторы</h2>
+          <p class="an-sub">Открытые задачи и просрочка</p>
+          <div id="operators"></div>
+        </section>
+      </div>
+
+      <p class="an-foot" id="foot">—</p>
+    </main>
+
+    <script src="/static/analytics.js"></script>
+  </body>
+</html>

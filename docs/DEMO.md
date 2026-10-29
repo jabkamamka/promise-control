@@ -158,7 +158,20 @@ Invoke-RestMethod "http://localhost:8080/api/v1/tasks?verification=refuted" | Se
 Детали: кнопка «звонок» в задаче показывает цитату клиента (`verification_quote`) и номер звонка,
 в котором она прозвучала.
 
-## 7. Ограничения (30 секунд, обязательный пункт)
+## 7. Аналитика и выгрузка (40 секунд)
+
+Открыть **http://localhost:8080/analytics**.
+
+**Что сказать:** «Это взгляд руководителя смены: сколько задач, сколько просрочено, как идут
+закрытия по дням, что подтвердили клиенты. Кнопка „Экспорт CSV“ отдаёт список в Excel — те же
+фильтры, что в API».
+
+```powershell
+Invoke-WebRequest "http://localhost:8080/api/v1/tasks-export?status=overdue" -OutFile overdue.csv
+Invoke-RestMethod "http://localhost:8080/api/v1/analytics?days=14" | Select-Object -ExpandProperty totals
+```
+
+## 8. Ограничения (30 секунд, обязательный пункт)
 
 Сказать честно:
 
