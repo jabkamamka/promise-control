@@ -138,6 +138,8 @@ function bindLogin() {
       });
       if (result.dev_link) {
         $("emailResult").innerHTML = `SMTP не настроен, ссылка для входа: <a href="${esc(result.dev_link)}">войти</a>`;
+      } else if (result.delivery === "disabled") {
+        $("emailResult").textContent = result.message || "Почта не настроена — войдите через Telegram-бота.";
       } else {
         $("emailResult").textContent = "Письмо отправлено. Проверьте почту.";
       }

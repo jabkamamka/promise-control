@@ -79,6 +79,20 @@ def test_telegram_code_is_one_time(client):
     assert client.post("/api/v1/auth/telegram/claim", json={"code": code}).status_code == 400
 
 
+def test_public_host_does_not_leak_dev_link(client):
+    """На публичном домене dev-ссылка не возвращается: иначе вход без пароля."""
+    response = client.post(
+        "/api/v1/auth/email/request",
+        json={"email": "someone@example.com"},
+        headers={"host": "promise.example.com"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["delivery"] == "disabled"
+    assert body["dev_link"] is None
+    assert "Telegram" in body["message"]
+
+
 def test_my_tasks_requires_login(client):
     assert client.get("/api/v1/me/tasks").status_code == 401
 

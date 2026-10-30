@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -31,6 +32,12 @@ def _base_url(request: Request) -> str:
     return f"{proto}://{host}"
 
 
+def _is_local(request: Request) -> bool:
+    """Dev-ссылка допустима только на локальном хосте — иначе это вход без пароля."""
+    host = (request.headers.get("host") or request.url.netloc or "").split(":")[0].lower()
+    return host in {"localhost", "127.0.0.1", "testserver", "0.0.0.0"}
+
+
 def _set_session(response: Response, token: str, request: Request) -> None:
     response.set_cookie(
         users.SESSION_COOKIE,
@@ -56,6 +63,12 @@ def request_email(payload: EmailIn, request: Request, conn: sqlite3.Connection =
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     conn.commit()
+    # На публичном хосте без SMTP вход по почте выключен: иначе любой, кто знает
+    # адрес, получил бы ссылку и вошёл. Остаётся Telegram-бот.
+    if result["delivery"] == "dev" and not _is_local(request) and os.environ.get("ALLOW_DEV_LOGIN") != "1":
+        result["dev_link"] = None
+        result["delivery"] = "disabled"
+        result["message"] = "Почта не настроена. Используйте вход через Telegram-бота."
     return result
 
 
