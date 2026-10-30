@@ -40,6 +40,9 @@ def local(day_offset: int, hour: int, minute: int = 0) -> str:
         ("Отправлю на почту до конца недели", local(1, 18), "end_of_week"),
         ("Вернусь с ответом на следующей неделе", local(8, 18), "end_of_week"),
         ("Наберу вас до пятницы с результатом", local(1, 18), "weekday"),
+        ("Отправлю пятого ноября", local(7, 18), "absolute_date"),
+        ("Пришлю двадцать первого марта", local(143, 18), "absolute_date"),
+        ("Перезвоню третьего ноября в десять утра", local(5, 10), "absolute_date"),
     ],
 )
 def test_deadline_examples(text, expected, source):

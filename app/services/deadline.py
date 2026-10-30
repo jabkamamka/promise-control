@@ -82,6 +82,21 @@ _MONTHS = {
     "август": 8, "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12,
 }
 
+#: Порядковые числительные в родительном падеже: «пятого ноября».
+_ORDINALS = (
+    ("перв", 1), ("втор", 2), ("трет", 3), ("четверт", 4), ("пят", 5), ("шест", 6),
+    ("седьм", 7), ("восьм", 8), ("девят", 9), ("десят", 10), ("одиннадцат", 11),
+    ("двенадцат", 12), ("тринадцат", 13), ("четырнадцат", 14), ("пятнадцат", 15),
+    ("шестнадцат", 16), ("семнадцат", 17), ("восемнадцат", 18), ("девятнадцат", 19),
+    ("двадцат", 20), ("тридцат", 30),
+)
+
+_ABS_ORDINAL_RE = re.compile(
+    r"\b(?P<day>(?:[а-я]+\s+){1,2})"
+    r"(?P<month>январ\w*|феврал\w*|март\w*|апрел\w*|ма[йя]\w*|июн\w*|июл\w*|август\w*|"
+    r"сентябр\w*|октябр\w*|ноябр\w*|декабр\w*)"
+)
+
 _TOD_PATTERNS = (
     (re.compile(r"\bв\s+(\d{1,2})(?::(\d{2}))?\s*(утра|дня|вечера|ночи)\b"), "at"),
     (re.compile(r"\bдо\s+(\d{1,2})(?::(\d{2}))?\s*(утра|дня|вечера|ночи)?\b"), "at"),
@@ -207,6 +222,21 @@ def _apply_ampm(hour: int, ampm: str | None) -> int:
     if ampm is None and hour <= 7:
         return hour + 12
     return hour
+
+
+def _parse_ordinal_day(fragment: str) -> int | None:
+    """«пятого» → 5, «двадцать первого» → 21."""
+    words = re.findall(r"[а-я]+", normalize_text(fragment))
+    total = 0
+    for word in words:
+        for stem, value in _ORDINALS:
+            if word.startswith(stem):
+                total += value
+                break
+    if total <= 0:
+        return None
+    day = total
+    return day if 1 <= day <= 31 else None
 
 
 def _find_time_of_day(text: str) -> tuple[int, int, str] | None:
@@ -360,6 +390,28 @@ def parse_deadline(
         if local_due <= local_now:
             local_due += dt.timedelta(days=7)
         return finish(local_due, "weekday", f"{m.group('prep')} {wd_word}")
+
+    # 5b. порядковая дата: «пятого ноября», «двадцать первого марта»
+    m = _ABS_ORDINAL_RE.search(norm)
+    if m:
+        day_num = _parse_ordinal_day(m.group("day"))
+        month_key = next((k for k in _MONTHS if m.group("month").startswith(k)), None)
+        if day_num and month_key:
+            year = local_now.year
+            try:
+                candidate = dt.date(year, _MONTHS[month_key], day_num)
+            except ValueError:
+                candidate = None
+            if candidate and candidate < local_now.date():
+                try:
+                    candidate = dt.date(year + 1, _MONTHS[month_key], day_num)
+                except ValueError:
+                    candidate = None
+            if candidate:
+                tod = _find_time_of_day(norm)
+                hour, minute = (tod[0], tod[1]) if tod else (18, 0)
+                local_due = dt.datetime.combine(candidate, dt.time(hour, minute), tzinfo=tz)
+                return finish(local_due, "absolute_date", m.group(0).strip())
 
     # 6. абсолютная дата
     m = _ABS_DATE_RE.search(norm)
