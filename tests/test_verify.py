@@ -36,8 +36,8 @@ def _first_call(quote: str = CALLBACK_QUOTE, *, phone: str = PHONE, call_id: str
         call_id,
         [{"speaker": "operator", "text": quote}],
         phone=phone,
-        started="2026-10-29T10:00:00Z",
-        ended="2026-10-29T10:05:00Z",
+        started="2033-10-29T10:00:00Z",
+        ended="2033-10-29T10:05:00Z",
     )
 
 
@@ -46,8 +46,8 @@ def _follow_up(
     *,
     phone: str = PHONE,
     call_id: str = "c-2",
-    started: str = "2026-10-30T09:00:00Z",
-    ended: str = "2026-10-30T09:02:00Z",
+    started: str = "2033-10-30T09:00:00Z",
+    ended: str = "2033-10-30T09:02:00Z",
 ) -> dict:
     return _call(
         call_id,
@@ -98,8 +98,8 @@ def test_refuted_promise_is_not_fulfilled(client):
             _first_call(DOCS_QUOTE),
             _follow_up(
                 "Мне обещали выставить счёт за октябрь, а он не пришёл.",
-                started="2026-11-05T09:00:00Z",
-                ended="2026-11-05T09:02:00Z",
+                started="2033-11-05T09:00:00Z",
+                ended="2033-11-05T09:02:00Z",
             ),
         ],
     ).json()
@@ -139,8 +139,8 @@ def test_unclear_reply_keeps_task_open(client):
             _first_call(),
             _follow_up(
                 "Получилось, спасибо.",
-                started="2026-10-29T12:00:00Z",
-                ended="2026-10-29T12:02:00Z",
+                started="2033-10-29T12:00:00Z",
+                ended="2033-10-29T12:02:00Z",
             ),
         ],
     )
@@ -178,8 +178,8 @@ def test_questions_imperatives_and_operator_words_are_ignored(client):
                     {"speaker": "operator", "text": "Да, перезвонили, спасибо."},
                     {"speaker": "client", "text": "Давайте проверим, что мастер приехал."},
                 ],
-                started="2026-10-30T09:00:00Z",
-                ended="2026-10-30T09:02:00Z",
+                started="2033-10-30T09:00:00Z",
+                ended="2033-10-30T09:02:00Z",
             ),
         ],
     )
@@ -208,8 +208,8 @@ def test_visit_is_confirmed_while_unrelated_fix_stays_open(client):
                     {"speaker": "operator", "text": "Оформлю повторный выезд мастера завтра."},
                     {"speaker": "operator", "text": "Исправлю адрес в заказе в течение дня."},
                 ],
-                started="2026-10-29T10:00:00Z",
-                ended="2026-10-29T10:05:00Z",
+                started="2033-10-29T10:00:00Z",
+                ended="2033-10-29T10:05:00Z",
             ),
             _follow_up("Мастер приезжал, но ничего не сделал."),
         ],
@@ -230,14 +230,14 @@ def test_latest_open_task_of_type_is_verified(client):
             _call(
                 "c-2",
                 [{"speaker": "operator", "text": "Перезвоню вам в пятницу в три часа."}],
-                started="2026-10-30T09:00:00Z",
-                ended="2026-10-30T09:05:00Z",
+                started="2033-10-30T09:00:00Z",
+                ended="2033-10-30T09:05:00Z",
             ),
             _follow_up(
                 "Да, перезвонили, спасибо.",
                 call_id="c-3",
-                started="2026-11-01T09:00:00Z",
-                ended="2026-11-01T09:02:00Z",
+                started="2033-11-01T09:00:00Z",
+                ended="2033-11-01T09:02:00Z",
             ),
         ],
     )

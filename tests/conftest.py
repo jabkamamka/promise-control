@@ -70,12 +70,12 @@ def verification_calls():
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def make_call(call_id="call-1", transcript=None, ended_at="2026-10-29T10:00:00Z", operator_id=7):
+def make_call(call_id="call-1", transcript=None, ended_at="2033-10-29T10:00:00Z", operator_id=7):
     return {
         "id": call_id,
         "operator_id": operator_id,
         "client_phone": "+70000000000",
-        "started_at": "2026-10-29T09:56:00Z",
+        "started_at": "2033-10-29T09:56:00Z",
         "ended_at": ended_at,
         "transcript": transcript or [],
     }

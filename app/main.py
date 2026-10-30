@@ -61,6 +61,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """Статика и HTML должны ревалидироваться: иначе браузер держит старый JS
+    после обновления страниц и ломается на изменившейся вёрстке."""
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    if request.url.path.startswith("/static/") or content_type.startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
 app.include_router(calls.router)
 app.include_router(tasks.router)
 app.include_router(types.router)

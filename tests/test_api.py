@@ -134,7 +134,7 @@ def test_overdue_is_computed_and_logged(client):
 
 def test_deadline_filters(client):
     client.post("/webhook/calls", json=[make_call("c-1", CALLBACK)])
-    future = "2026-12-31T00:00:00Z"
+    future = "2034-12-31T00:00:00Z"
     assert client.get(f"/api/v1/tasks?due_before={future}").json()["total"] == 1
     assert client.get("/api/v1/tasks?due_before=2020-01-01T00:00:00Z").json()["total"] == 0
 
