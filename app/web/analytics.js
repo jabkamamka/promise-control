@@ -202,6 +202,77 @@ function drawChart(series) {
   svg.innerHTML = parts.join("");
 }
 
+async function loadEmployees(days = Number($("employeesDays").value)) {
+  const box = $("employees");
+  box.innerHTML = '<p class="an-sub">загружаем…</p>';
+  try {
+    const response = await fetch(`/api/v1/analytics/employees?days=${days}`, { cache: "no-store" });
+    if (response.status === 403) {
+      box.innerHTML = '<p class="an-sub">Нет доступа: аналитика только для администратора.</p>';
+      return;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderEmployees(await response.json());
+  } catch (error) {
+    box.innerHTML = `<p class="an-sub">Не удалось загрузить: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderEmployees(data) {
+  const rows = data.employees.filter((item) => item.taken > 0 || item.role === "admin");
+  if (!rows.length) {
+    $("employees").innerHTML = '<p class="an-sub">Пока никто не брал задачи в этом периоде.</p>';
+    return;
+  }
+  const head = `
+    <tr>
+      <th>Сотрудник</th>
+      <th class="num">Взято</th>
+      <th class="num">В работе</th>
+      <th class="num">Выполнено</th>
+      <th class="num">Просрочено</th>
+      <th class="num">В срок</th>
+      <th class="num">Среднее закрытие</th>
+    </tr>`;
+  const body = rows
+    .map((item) => {
+      const role = item.role === "admin" ? '<span class="an-role">админ</span>' : "";
+      const slow = item.avg_close_hours == null ? "—" : `${String(item.avg_close_hours).replace(".", ",")} ч`;
+      return `
+      <tr>
+        <td>
+          <div class="an-name">${escapeHtml(item.full_name || item.email)}${role}</div>
+          <div class="an-mail">${escapeHtml(item.email)}</div>
+        </td>
+        <td class="num">${num(item.taken)}</td>
+        <td class="num">${num(item.in_progress)}</td>
+        <td class="num">${num(item.done)} <span class="an-share">${pct(item.done_share)}</span></td>
+        <td class="num ${item.overdue ? "an-bad" : ""}">${num(item.overdue)}</td>
+        <td class="num">${pct(item.on_time_share)}</td>
+        <td class="num">${slow}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const t = data.totals;
+  $("employees").innerHTML = `
+    <table class="an-table">
+      <thead>${head}</thead>
+      <tbody>${body}</tbody>
+      <tfoot>
+        <tr>
+          <td>Всего за ${data.period_days} дн.</td>
+          <td class="num">${num(t.taken)}</td>
+          <td class="num">${num(t.in_progress)}</td>
+          <td class="num">${num(t.done)}</td>
+          <td class="num">${num(t.overdue)}</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+        </tr>
+      </tfoot>
+    </table>`;
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(
     /[&<>"']/g,
@@ -209,7 +280,15 @@ function escapeHtml(value) {
   );
 }
 
-$("refresh").addEventListener("click", () => load());
+$("refresh").addEventListener("click", () => {
+  load();
+  loadEmployees();
+});
+$("employeesDays").addEventListener("change", () => loadEmployees());
 periodChips();
 load(14);
-setInterval(() => load(), 60000);
+loadEmployees(30);
+setInterval(() => {
+  load();
+  loadEmployees();
+}, 60000);

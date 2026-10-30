@@ -261,7 +261,24 @@ def init_db() -> None:
                     now,
                 ),
             )
+        promote_admins(conn)
         conn.commit()
+
+
+def admin_emails() -> list[str]:
+    return [item.strip().lower() for item in settings.admin_emails.split(",") if item.strip()]
+
+
+def promote_admins(conn: sqlite3.Connection) -> int:
+    """Выдаёт роль admin адресам из ADMIN_EMAILS."""
+    changed = 0
+    for email in admin_emails():
+        cur = conn.execute(
+            "UPDATE employees SET role = 'admin' WHERE lower(email) = ? AND role != 'admin'",
+            (email,),
+        )
+        changed += cur.rowcount
+    return changed
 
 
 def get_db() -> Iterator[sqlite3.Connection]:

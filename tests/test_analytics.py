@@ -1,7 +1,7 @@
 
 """Аналитика и выгрузка CSV: новые методы, существующие не ломают."""
 from __future__ import annotations
-from conftest import login_employee  # noqa: E402
+from conftest import login_admin, login_employee  # noqa: E402
 
 import csv
 import io
@@ -12,6 +12,7 @@ def _seed(client, sample_calls):
 
 
 def test_analytics_structure(client, sample_calls):
+    login_admin(client)
     _seed(client, sample_calls)
     data = client.get("/api/v1/analytics?days=14").json()
 
@@ -31,6 +32,7 @@ def test_analytics_structure(client, sample_calls):
 
 
 def test_analytics_matches_stats(client, sample_calls):
+    login_admin(client)
     _seed(client, sample_calls)
     analytics = client.get("/api/v1/analytics").json()
     stats = client.get("/api/v1/stats").json()
@@ -44,13 +46,14 @@ def test_analytics_matches_stats(client, sample_calls):
 
 
 def test_analytics_period_validation(client):
+    login_admin(client)
     assert client.get("/api/v1/analytics?days=0").status_code == 422
     assert client.get("/api/v1/analytics?days=91").status_code == 422
     assert client.get("/api/v1/analytics?days=7").json()["period_days"] == 7
 
 
 def test_analytics_operators_and_close_time(client, sample_calls):
-    login_employee(client)
+    login_admin(client)
     _seed(client, sample_calls)
 
     task = client.get("/api/v1/tasks?limit=1").json()["items"][0]
@@ -64,6 +67,7 @@ def test_analytics_operators_and_close_time(client, sample_calls):
 
 
 def test_csv_export_shape(client, sample_calls):
+    login_admin(client)
     _seed(client, sample_calls)
     total = client.get("/api/v1/tasks?limit=1").json()["total"]
 
@@ -82,6 +86,7 @@ def test_csv_export_shape(client, sample_calls):
 
 
 def test_csv_export_respects_filters(client, sample_calls):
+    login_admin(client)
     _seed(client, sample_calls)
 
     by_type = client.get("/api/v1/tasks?type=documents&limit=1").json()["total"]
@@ -96,6 +101,7 @@ def test_csv_export_respects_filters(client, sample_calls):
 
 
 def test_csv_handles_quotes_and_semicolons(client):
+    login_admin(client)
     call = {
         "id": "csv-escape-1",
         "operator_id": 1,

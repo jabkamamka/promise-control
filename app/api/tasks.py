@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..db import get_db
 from ..schemas import TaskEvent, TaskList, TaskOut, TaskStatusUpdate
 from ..services.tasks import (
+    OwnershipError,
     TaskError,
     assign_task,
     get_task,
@@ -126,6 +127,8 @@ def _apply_status(
         task = update_status(conn, task_id, payload.status, payload.comment, employee)
     except KeyError:
         raise HTTPException(status_code=404, detail="Задача не найдена")
+    except OwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except TaskError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     return TaskOut(**task)

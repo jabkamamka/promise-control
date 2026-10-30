@@ -80,6 +80,9 @@ class Settings:
     #: снимок звонков из API (data/sample_calls.json). По умолчанию выключено.
     auto_seed: bool = _env_bool("AUTO_SEED", False)
 
+    #: Адреса с правами администратора (через запятую). Им доступна аналитика.
+    admin_emails: str = os.environ.get("ADMIN_EMAILS", "").strip()
+
     #: Публичный адрес сервиса: подставляется в ссылки внутри писем.
     public_base_url: str = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
 

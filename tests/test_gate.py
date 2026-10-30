@@ -1,7 +1,7 @@
 """Шлюз авторизации: без входа страницы сайта недоступны."""
 from __future__ import annotations
 
-from conftest import login_employee
+from conftest import login_admin, login_employee
 
 
 def test_page_requires_login(client):
@@ -18,9 +18,16 @@ def test_login_page_is_open(client):
 
 def test_pages_open_after_login(client):
     login_employee(client, email="gate@example.com")
-    for path in ("/", "/analytics"):
-        response = client.get(path, follow_redirects=False)
-        assert response.status_code == 200, path
+    assert client.get("/", follow_redirects=False).status_code == 200
+    # аналитика — только администратору
+    denied = client.get("/analytics", follow_redirects=False)
+    assert denied.status_code == 303
+    assert denied.headers["location"] == "/?denied=analytics"
+
+
+def test_analytics_page_for_admin(client):
+    login_admin(client)
+    assert client.get("/analytics", follow_redirects=False).status_code == 200
 
 
 def test_login_page_redirects_when_logged_in(client):

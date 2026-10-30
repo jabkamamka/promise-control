@@ -14,7 +14,6 @@ import sqlite3
 from typing import Any
 
 from ..utils import normalize_text, parse_iso, utc_now
-
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-zа-я]{2,}$", re.IGNORECASE)
 PASSWORD_MIN = 8
 PASSWORD_MAX = 128
@@ -140,6 +139,23 @@ def employee_by_email(conn: sqlite3.Connection, email: str) -> dict[str, Any] | 
     return dict(row) if row else None
 
 
+def _promote_admin(conn: sqlite3.Connection, employee: dict[str, Any]) -> dict[str, Any]:
+    """Адрес из ADMIN_EMAILS получает роль admin при входе."""
+    from ..config import settings
+
+    allowed = {item.strip().lower() for item in settings.admin_emails.split(",") if item.strip()}
+    if employee["email"].lower() in allowed and employee.get("role") != "admin":
+        conn.execute("UPDATE employees SET role = 'admin' WHERE id = ?", (employee["id"],))
+        conn.commit()
+        employee = dict(employee)
+        employee["role"] = "admin"
+    return employee
+
+
+def is_admin(employee: dict[str, Any] | None) -> bool:
+    return bool(employee and employee.get("role") == "admin")
+
+
 def register(
     conn: sqlite3.Connection,
     email: str,
@@ -176,7 +192,7 @@ def login(conn: sqlite3.Connection, email: str, password: str) -> dict[str, Any]
         )
     conn.execute("UPDATE employees SET last_login_at = ? WHERE id = ?", (utc_now(), employee["id"]))
     conn.commit()
-    return employee
+    return _promote_admin(conn, employee)
 
 
 def change_password(conn: sqlite3.Connection, employee: dict[str, Any], current: str, new: str) -> None:
@@ -302,7 +318,7 @@ def confirm_by_token(conn: sqlite3.Connection, token: str) -> dict[str, Any]:
     conn.execute("UPDATE employees SET last_login_at = ? WHERE id = ?", (now, employee["id"]))
     conn.execute("UPDATE login_tokens SET used_at = ? WHERE id = ?", (now, row["id"]))
     conn.commit()
-    return employee_by_email(conn, row["email"]) or employee
+    return _promote_admin(conn, employee_by_email(conn, row["email"]) or employee)
 
 
 def _login_token_row(conn: sqlite3.Connection, where: str, params: tuple) -> sqlite3.Row:
@@ -331,7 +347,7 @@ def _complete_login(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any
         # переход по ссылке из письма сам доказывает, что ящик существует
         conn.execute("UPDATE employees SET email_confirmed_at = ? WHERE id = ?", (now, employee["id"]))
     conn.commit()
-    return employee_by_email(conn, row["email"]) or employee
+    return _promote_admin(conn, employee_by_email(conn, row["email"]) or employee)
 
 
 def login_by_token(conn: sqlite3.Connection, token: str) -> dict[str, Any]:

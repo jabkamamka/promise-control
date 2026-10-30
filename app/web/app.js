@@ -317,6 +317,12 @@ function bindNotifications() {
 function renderEmployee() {
   const box = $("employeeBox");
   if (!box) return;
+  // Аналитика — только администратору
+  const analyticsButton = $("openAnalytics");
+  if (analyticsButton) {
+    const isAdmin = Boolean(state.employee && state.employee.role === "admin");
+    analyticsButton.classList.toggle("hidden", !isAdmin);
+  }
   if (state.employee) {
     const mine = $("myTasks");
     if (mine) mine.classList.remove("hidden");
@@ -887,6 +893,9 @@ if (analyticsButton) {
       refresh();
     });
   }
+
+  const denied = new URLSearchParams(window.location.search).get("denied");
+  if (denied === "analytics") toast("Аналитика доступна только администратору", true);
 
   // ссылка из напоминания: /?mine=1 — сразу только свои задачи
   if (new URLSearchParams(window.location.search).get("mine") && state.employee && myTasks) {

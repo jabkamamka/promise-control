@@ -22,6 +22,7 @@ os.environ["SMTP_HOST"] = ""
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASSWORD"] = ""
 os.environ["NOTIFY_ENABLED"] = "0"  # планировщик не должен вмешиваться в тесты
+os.environ["ADMIN_EMAILS"] = "admin@example.com"
 os.environ.pop("WEBHOOK_TOKEN", None)
 os.environ["LLM_ENABLED"] = "0"
 
@@ -115,3 +116,11 @@ def login_employee(client, email="tester@example.com", name="Тестовый С
     employee = client.get("/auth/me").json()["employee"]
     assert employee is not None, "после подтверждения должна быть сессия"
     return employee
+
+
+ADMIN_EMAIL = "admin@example.com"
+
+
+def login_admin(client):
+    """Регистрирует и подтверждает администратора (аналитика только ему)."""
+    return login_employee(client, email=ADMIN_EMAIL, name="Администратор Смены")

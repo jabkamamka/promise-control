@@ -60,6 +60,13 @@ def require_employee(request: Request, conn: sqlite3.Connection = Depends(get_db
     return employee
 
 
+def require_admin(employee: dict = Depends(require_employee)) -> dict:
+    """Аналитика и выгрузки — только администратору."""
+    if employee.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Аналитика доступна только администратору")
+    return employee
+
+
 def _set_session(response: Response, conn: sqlite3.Connection, employee: dict) -> None:
     token, _expires = auth.create_session(conn, employee["id"])
     response.set_cookie(

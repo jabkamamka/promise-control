@@ -1,4 +1,5 @@
-"""HTTP-слой: аналитика и выгрузка. Новые методы, существующие не меняются."""
+"""HTTP-слой: аналитика и выгрузка. Доступ — только администратору."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -8,7 +9,9 @@ from fastapi.responses import PlainTextResponse
 
 from ..db import get_db
 from ..services.analytics import build_analytics
+from ..services.employee_analytics import build_employees
 from ..services.export import filename, tasks_csv
+from .auth import require_admin
 
 router = APIRouter(prefix="/api/v1", tags=["analytics"])
 
@@ -16,9 +19,19 @@ router = APIRouter(prefix="/api/v1", tags=["analytics"])
 @router.get("/analytics", summary="Сводка для руководителя смены")
 def analytics_view(
     days: int = Query(default=14, ge=1, le=90, description="Сколько дней показывать на графике"),
+    admin: dict = Depends(require_admin),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     return build_analytics(conn, days=days)
+
+
+@router.get("/analytics/employees", summary="Аналитика по сотрудникам")
+def analytics_employees(
+    days: int = Query(default=30, ge=1, le=365, description="Окно в днях от сегодня"),
+    admin: dict = Depends(require_admin),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    return build_employees(conn, days=days)
 
 
 @router.get("/tasks-export", summary="Выгрузка задач в CSV (Excel)")
@@ -32,6 +45,7 @@ def tasks_export(
     q: str | None = None,
     verification: str | None = None,
     sort: str = "due_at",
+    admin: dict = Depends(require_admin),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> PlainTextResponse:
     csv_text = tasks_csv(

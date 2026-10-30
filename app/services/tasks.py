@@ -33,6 +33,23 @@ class TaskError(Exception):
     """Ошибка бизнес-правила (невалидный переход и т.п.)."""
 
 
+class OwnershipError(TaskError):
+    """Задача закреплена за другим сотрудником — трогать нельзя."""
+
+
+def _ensure_owner(task: dict[str, Any], employee: dict[str, Any] | None) -> None:
+    """Не даёт менять чужую задачу. Администратор — исключение."""
+    if not employee:
+        return
+    assignee = task.get("assignee_id")
+    if assignee and assignee != employee["id"] and employee.get("role") != "admin":
+        name = task.get("assignee_name") or "другой сотрудник"
+        raise OwnershipError(
+            f"Задача закреплена за сотрудником «{name}». "
+            "Чужую задачу менять нельзя — попросите её владельца."
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Типы обещаний
 # --------------------------------------------------------------------------- #
@@ -379,6 +396,7 @@ def update_status(
             f"Переход «{STATUS_TITLES.get(current, current)}» → «{STATUS_TITLES.get(new_status, new_status)}» "
             f"запрещён. Доступно: {allowed}"
         )
+    _ensure_owner(task, employee)
     now = utc_now()
     closed = now if new_status == "done" else None
     conn.execute(
@@ -418,7 +436,8 @@ def assign_task(conn: sqlite3.Connection, task_id: str, employee: dict[str, Any]
 
     current_assignee = task.get("assignee_id")
     if current_assignee and current_assignee != employee["id"]:
-        raise TaskError(f"Задачу уже взял {task.get('assignee_name') or 'другой сотрудник'}")
+        name = task.get("assignee_name") or "другой сотрудник"
+        raise TaskError(f"Эту задачу уже взял другой сотрудник: {name}")
 
     now = utc_now()
     changed = task["status"] != "in_progress"

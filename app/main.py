@@ -142,8 +142,11 @@ def index(request: Request):
 
 @app.get("/analytics", include_in_schema=False)
 def analytics_page(request: Request):
-    if not _current_employee(request):
+    employee = _current_employee(request)
+    if not employee:
         return RedirectResponse("/login?next=/analytics", status_code=303)
+    if employee.get("role") != "admin":
+        return RedirectResponse("/?denied=analytics", status_code=303)
     return FileResponse(WEB_DIR / "analytics.html")
 
 
