@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="Контроль обещаний — сервис УралМикро">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1a15"/>
+      <stop offset="0.55" stop-color="#14130f"/>
+      <stop offset="1" stop-color="#0d0c09"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1f4bff" stop-opacity="0.40"/>
+      <stop offset="1" stop-color="#1f4bff" stop-opacity="0"/>
+    </linearGradient>
+    <style>
+      .t { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+      .d { font-family: Georgia, 'Times New Roman', serif; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <rect width="1200" height="420" fill="url(#glow)"/>
+  <circle cx="1120" cy="40" r="180" fill="#ff5a1f" opacity="0.06"/>
+
+  <!-- логотип -->
+  <g transform="translate(64 62)">
+    <rect width="76" height="76" rx="20" fill="#f2eee5"/>
+    <path d="M16 42h11l7-19 10 36 8-24h11" fill="none" stroke="#16150f" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="62" cy="35" r="5" fill="#ff5a1f"/>
+  </g>
+
+  <text x="72" y="176" class="t" fill="#8a8474" font-size="16" letter-spacing="4">URALMICRO · ХАКАТОН 2026</text>
+  <text x="70" y="238" class="d" fill="#f2eee5" font-size="60" font-weight="600">Контроль обещаний</text>
+  <text x="72" y="278" class="t" fill="#c9c2b2" font-size="21">
+    Расшифровка звонка → обещание оператора → задача со сроком
+  </text>
+
+  <!-- карточка задачи -->
+  <g transform="translate(902 62)">
+    <rect width="234" height="196" rx="18" fill="#fffdf8"/>
+    <rect x="1" y="1" width="232" height="194" rx="17" fill="none" stroke="#e2dbcc"/>
+    <text x="20" y="34" class="t" fill="#8a8474" font-size="10" letter-spacing="2">ЗАДАЧА</text>
+    <rect x="20" y="44" width="112" height="22" rx="11" fill="#fbe3d8"/>
+    <text x="32" y="59" class="t" fill="#a83210" font-size="11">просрочена</text>
+    <text x="20" y="98" class="t" fill="#16150f" font-size="17" font-weight="600">Перезвонить</text>
+    <text x="20" y="120" class="t" fill="#16150f" font-size="17" font-weight="600">клиенту</text>
+    <text x="20" y="146" class="t" fill="#6b6659" font-size="11">срок 30 окт, 10:00</text>
+    <line x1="20" y1="158" x2="214" y2="158" stroke="#e9e3d7"/>
+    <text x="20" y="178" class="t" fill="#8a8474" font-size="11">«Перезвоню завтра»</text>
+  </g>
+
+  <!-- конвейер -->
+  <g class="t" font-size="14" fill="#f2eee5">
+    <g transform="translate(64 320)">
+      <rect width="196" height="46" rx="12" fill="#24231d" stroke="#3a372d"/>
+      <text x="16" y="29">POST /webhook/calls</text>
+    </g>
+    <path d="M268 343h30" stroke="#56523f" stroke-width="2"/>
+    <g transform="translate(304 320)">
+      <rect width="172" height="46" rx="12" fill="#24231d" stroke="#3a372d"/>
+      <text x="16" y="29">7 типов обещаний</text>
+    </g>
+    <path d="M484 343h30" stroke="#56523f" stroke-width="2"/>
+    <g transform="translate(520 320)">
+      <rect width="164" height="46" rx="12" fill="#24231d" stroke="#3a372d"/>
+      <text x="16" y="29">срок от звонка</text>
+    </g>
+    <path d="M692 343h30" stroke="#56523f" stroke-width="2"/>
+    <g transform="translate(728 320)">
+      <rect width="186" height="46" rx="12" fill="#1f4bff"/>
+      <text x="16" y="29">задача сотруднику</text>
+    </g>
+    <path d="M922 343h30" stroke="#56523f" stroke-width="2"/>
+    <g transform="translate(958 320)">
+      <rect width="178" height="46" rx="12" fill="#24231d" stroke="#ff5a1f"/>
+      <text x="16" y="29">проверка</text>
+    </g>
+  </g>
+
+  <g transform="translate(72 40)">
+    <circle cx="0" cy="0" r="5" fill="#0f7a55"/>
+    <text x="14" y="6" class="t" fill="#9bbfae" font-size="14">работает без интернета · SQLite · 155 тестов</text>
+  </g>
+</svg>
