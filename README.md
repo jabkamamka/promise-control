@@ -62,6 +62,41 @@ python scripts\seed_demo.py     # загрузит 52 звонка из data/sam
 
 ---
 
+## Публичный стенд на бесплатном хостинге
+
+GitHub Pages не подойдёт: сервису нужен живой Python-процесс. В репозитории всё готово для бесплатных тарифов.
+
+**Render (один клик, нужен аккаунт GitHub)**
+
+1. Открыть <https://render.com/deploy?repo=https://github.com/jabkamamka/promise-control>
+2. Войти через GitHub → **Create Web Service**.
+3. Render сам прочитает `render.yaml`: Python 3.12, `uvicorn`, health-check `/health`, `AUTO_SEED=1`.
+
+Первый деплой ~3 минуты. Бесплатный инстанс засыпает через 15 минут без запросов и просыпается за ~30 секунд.
+
+**Hugging Face Spaces (Docker, без карты)**
+
+1. <https://huggingface.co/new-space> → SDK **Docker**, видимость Public.
+2. Запушить репозиторий в Space (`git push space main`).
+3. В настройках Space указать переменную `PORT=7860` (её ждёт HF).
+
+**Любой Docker-хостинг**
+
+```bash
+docker build -t promise-control .
+docker run -p 8080:8080 promise-control
+# http://localhost:8080  ·  /analytics  ·  /docs
+```
+
+**Про данные.** На бесплатных тарифах диск эфемерный: SQLite обнуляется при перезапуске.
+Поэтому в `render.yaml` и `Dockerfile` включён `AUTO_SEED=1` — при пустой базе сервис сам
+загружает сохранённый снимок звонков из API (`data/sample_calls.json`, 52 звонка → 189 задач).
+Для постоянного хранения нужен платный диск или PostgreSQL (см. `docs/ROADMAP.md`).
+
+Локально `AUTO_SEED` выключен — данные попадают только через вебхук от программы-отправителя.
+
+---
+
 ## Как работает поиск обещаний
 
 Полное описание — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Коротко:

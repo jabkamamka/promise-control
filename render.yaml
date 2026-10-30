@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: promise-control
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: APP_TIMEZONE
+        value: Asia/Yekaterinburg
+      - key: AUTO_SEED
+        value: "1"
+      - key: DATABASE_PATH
+        value: /opt/render/project/src/data/promises.db

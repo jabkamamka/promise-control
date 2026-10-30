@@ -19,7 +19,26 @@ WEB_DIR = Path(__file__).resolve().parent / "web"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    if settings.auto_seed:
+        _seed_if_empty()
     yield
+
+
+def _seed_if_empty() -> None:
+    """Публичное демо: если база пустая, загрузить сохранённый снимок звонков из API."""
+    import json
+
+    from .db import connect
+    from .services.ingest import ingest_payload
+
+    path = Path(__file__).resolve().parent.parent / "data" / "sample_calls.json"
+    with connect() as conn:
+        existing = conn.execute("SELECT COUNT(*) AS c FROM calls").fetchone()["c"]
+        if existing or not path.exists():
+            return
+        calls = json.loads(path.read_text(encoding="utf-8"))
+        result = ingest_payload(conn, calls)
+    print(f"[auto-seed] звонков {result['received']}, задач {result['tasks_created']}")
 
 
 app = FastAPI(

@@ -76,5 +76,9 @@ class Settings:
     page_limit_default: int = 50
     page_limit_max: int = 200
 
+    #: Публичное демо на бесплатном хостинге: при пустой базе загрузить сохранённый
+    #: снимок звонков из API (data/sample_calls.json). По умолчанию выключено.
+    auto_seed: bool = _env_bool("AUTO_SEED", False)
+
 
 settings = Settings()
