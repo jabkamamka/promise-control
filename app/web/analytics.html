@@ -3,59 +3,118 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Аналитика обещаний — панель руководителя</title>
+    <meta name="theme-color" content="#f2eee5" />
+    <meta name="color-scheme" content="light" />
+    <title>Аналитика обещаний — пульт руководителя</title>
+    <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/analytics.css" />
   </head>
-  <body class="an-body">
-    <header class="an-header">
-      <div class="an-brand">
-        <div class="an-mark">✓</div>
-        <div>
-          <h1>Аналитика обещаний</h1>
-          <p>Сводка для руководителя смены: нагрузка, просрочка, исполнение</p>
+  <body>
+    <a class="skip-link" href="#analyticsMain">Перейти к аналитике</a>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path
+                d="M9 26h7l4.5-12 6.5 23 5-15h7"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle cx="39" cy="22" r="2.8" fill="#ff5a1f" />
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <p class="eyebrow">UralMicro <span class="eyebrow-slash">/</span> пульт руководителя</p>
+            <h1>Контроль <em>обещаний</em></h1>
+            <p class="brand-sub">Нагрузка, просрочка и исполнение по словам клиентов</p>
+          </div>
         </div>
-      </div>
-      <div class="an-actions">
-        <button id="period7">7 дней</button>
-        <button id="period14" class="primary">14 дней</button>
-        <button id="period30">30 дней</button>
-        <button id="refresh">Обновить</button>
-        <a id="exportCsv" class="primary" href="/api/v1/tasks-export">Экспорт CSV</a>
-        <a href="/">К задачам</a>
+
+        <section class="telemetry" aria-label="Ключевые показатели">
+          <div class="telemetry-head">
+            <span class="telemetry-title">Сводка</span>
+            <span class="live-chip" title="Данные обновляются автоматически">
+              <span class="live-dot" aria-hidden="true"></span>
+              <span class="pulse-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              <span>live</span>
+            </span>
+          </div>
+          <div class="stats" id="kpis"></div>
+          <div class="telemetry-foot">
+            <span id="stamp">обновлено только что</span>
+          </div>
+        </section>
       </div>
     </header>
 
-    <main class="an-main">
-      <div id="error" class="an-error" hidden></div>
-      <section class="an-kpis" id="kpis">
-        <div class="an-kpi"><b>—</b><span>загрузка…</span></div>
+    <main class="an-main" id="analyticsMain">
+      <section class="toolbar an-toolbar">
+        <div class="filter-head">
+          <span class="filter-title">Период</span>
+          <span class="filter-note">окно графика вокруг сегодняшнего дня</span>
+        </div>
+        <div class="chips" id="periods" role="group" aria-label="Период аналитики"></div>
+
+        <div class="toolbar-controls an-actions">
+          <button id="refresh" class="ghost" type="button">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8 8 0 1 0-.8 4.2"></path>
+              <path d="M20 5v6h-6"></path>
+            </svg>
+            <span>Обновить</span>
+          </button>
+          <a class="ghost toolbar-strong an-link" id="exportCsv" href="/api/v1/tasks-export">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12"></path>
+              <path d="m7 11 5 5 5-5"></path>
+              <path d="M4 21h16"></path>
+            </svg>
+            <span>Экспорт CSV</span>
+          </a>
+          <a class="ghost an-link" href="/">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12h16"></path>
+              <path d="m10 6-6 6 6 6"></path>
+            </svg>
+            <span>К задачам</span>
+          </a>
+        </div>
       </section>
+
+      <div id="error" class="an-error" hidden></div>
 
       <div class="an-grid">
         <section class="an-card">
-          <h2>Сроки и выполнение по дням</h2>
-          <p class="an-sub" id="chartSub">Сколько обещаний истекает в каждый день и сколько закрыто</p>
-          <div class="an-legend">
-            <span><i style="background:#4f46e5"></i>срок (открытые)</span>
-            <span><i style="background:#0f9d58"></i>выполнено</span>
+          <div class="section-head">
+            <h2>Сроки и выполнение</h2>
+            <span class="an-legend">
+              <i class="an-dot blue"></i>срок
+              <i class="an-dot green"></i>выполнено
+            </span>
           </div>
-          <svg class="an-chart" id="chart" viewBox="0 0 760 260" role="img" aria-label="График созданных и закрытых задач по дням"></svg>
+          <p class="an-sub" id="chartSub">Сколько обещаний истекает в каждый день и сколько закрыто</p>
+          <svg class="an-chart" id="chart" viewBox="0 0 760 260" role="img" aria-label="График сроков и выполнения по дням"></svg>
         </section>
 
         <section class="an-card">
           <h2>Проверка исполнения</h2>
           <p class="an-sub">По словам клиента в следующих звонках</p>
-          <div class="an-verify" id="verify"></div>
-          <h2 style="margin-top:22px">Сроки закрытия</h2>
+          <div class="an-pills" id="verify"></div>
+
+          <h2 class="an-h2-gap">Сроки закрытия</h2>
           <p class="an-sub">От создания задачи до «Выполнена»</p>
-          <div class="an-verify" id="closeTime"></div>
+          <div class="an-pills" id="closeTime"></div>
         </section>
       </div>
 
       <div class="an-grid">
         <section class="an-card">
           <h2>Типы обещаний</h2>
-          <p class="an-sub">Сколько задач каждого типа создал детектор</p>
+          <p class="an-sub">Что нашёл детектор в репликах операторов</p>
           <div id="types"></div>
         </section>
 
