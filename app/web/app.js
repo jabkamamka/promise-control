@@ -139,12 +139,9 @@ function statusChips(counts) {
   $("statusChips").innerHTML = items
     .map((item) => {
       const active = state.status === item.key;
-      const label = `${item.title}${item.rank ? `, ранг срочности ${item.rank}` : ""}${
-        item.count != null ? `, задач: ${item.count}` : ""
-      }`;
+      const label = `${item.title}${item.count != null ? `, задач: ${item.count}` : ""}`;
       return `
       <button type="button" class="chip ${active ? "active" : ""}" data-status="${item.key}" aria-pressed="${active}" aria-label="${esc(label)}">
-        ${item.rank ? `<span class="rank" aria-hidden="true">${item.rank}</span>` : ""}
         <span class="chip-label">${item.title}</span>
         ${item.count != null ? `<span class="count">${item.count}</span>` : ""}
       </button>`;
