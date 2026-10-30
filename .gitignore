@@ -30,3 +30,13 @@ sender_windows_*.exe
 data/outbox/
 _srv.log
 *.log
+
+# --- Данные чата и демо-артефакты ---
+data/chat/
+data/chat-demo.db
+data/demo-chart.png
+
+# --- Черновики и служебные скрипты ---
+_*.py
+_*.mjs
+_shots/

@@ -17,6 +17,8 @@
 | 404 | Объект не найден |
 | 409 | Нарушено бизнес-правило: запрещённый переход статуса, дубль типа, удаление используемого типа |
 | 422 | Ошибка валидации схемы (Pydantic) |
+| 502 | API партнёра недоступен или отклонил токен (только `POST /api/v1/calls/fetch-api`) |
+| 503 | Загрузка из API не настроена: нет `URALMICRO_SERVICE_TOKEN` |
 
 ---
 
@@ -67,6 +69,63 @@
 Один битый звонок не мешает обработать остальные: в ответе он попадёт со `status: "error"`.
 
 Совместимость: тот же обработчик доступен по адресу `POST /calls` — если отправитель настроен на него.
+
+## POST /api/v1/calls/fetch-api
+
+Кнопка «Загрузить ещё из API» в панели: сервис сам идёт в API партнёра, берёт свежие
+расшифровки и создаёт по ним задачи — от 10 до 20 за одно нажатие.
+
+Требует входа сотрудника (cookie `sid`). Если в `.env` нет `URALMICRO_SERVICE_TOKEN`,
+метод отвечает 503, а остальной сервис работает как обычно.
+
+| Параметр | Тип | По умолчанию | Описание |
+|---|---|---|---|
+| `min_tasks` | int | 10 | Минимум новых задач (1–100) |
+| `target_tasks` | int | 15 | Сколько задач хочется получить |
+| `max_tasks` | int | 20 | Потолок: больше не создаст |
+
+Нужно `1 ≤ min_tasks ≤ target_tasks ≤ max_tasks`, иначе 400.
+
+Почему запросов к API несколько: параметр `count` партнёрский API игнорирует и отдаёт
+небольшую порцию случайных звонков, а у одного и того же разговора может оказаться новый `id`.
+Поэтому повторы отсеиваются по `id` **и** по тексту расшифровки. Если свежих записей не
+хватает на `min_tasks`, сервис делает дополнительный заход и честно пишет об этом в `message`.
+
+**Ответ 200:**
+
+```json
+{
+  "fetched": 32,
+  "skipped": 25,
+  "selected": 7,
+  "planned": 16,
+  "received": 7,
+  "processed": 7,
+  "duplicates": 0,
+  "failed": 0,
+  "tasks_created": 16,
+  "tasks_verified": 0,
+  "min_tasks": 10,
+  "max_tasks": 20,
+  "message": "Из API: 7 звонков → 16 задач",
+  "calls": [
+    { "call_id": "CCOKFF6MG6BPPA37HN2SCFQEH5", "status": "processed", "tasks_created": 2, "promises_found": 2, "tasks_verified": 0, "error": null }
+  ]
+}
+```
+
+`fetched` — сколько звонков пришло из API, `skipped` — сколько отброшено как повторы,
+`selected` — сколько попало в порцию, `planned` — сколько задач предсказал детектор.
+
+| Код | Когда |
+|---|---|
+| 400 | Нарушен порядок `min_tasks ≤ target_tasks ≤ max_tasks` |
+| 401 | Нет входа сотрудника |
+| 502 | API недоступен, отклонил токен или вернул не JSON |
+| 503 | Не задан `URALMICRO_SERVICE_TOKEN` |
+
+Если в API не осталось незнакомых расшифровок: 200, `selected = 0`, `tasks_created = 0`,
+`message` — «В API нет новых расшифровок…». Повторное нажатие кнопки дублей не создаёт.
 
 ---
 
@@ -325,6 +384,7 @@ Invoke-WebRequest "http://localhost:8080/api/v1/tasks-export?status=overdue" -Ou
 | `POST /auth/login` | `{"email": "...", "password": "..."}` | `{"employee": {...}}`, ставит cookie |
 | `POST /auth/logout` | — | `{"ok": true}` |
 | `GET /auth/me` | — | `{"employee": {...}}` или `{"employee": null}` |
+| `PATCH /auth/me` | `{"full_name": "...", "email": "..."}` | `{"employee": {...}}`; при смене почты — письмо-подтверждение |
 | `POST /auth/password` | `{"current_password": "...", "new_password": "..."}` | `{"ok": true}`, прочие сессии закрываются |
 
 ```json
@@ -334,11 +394,50 @@ Invoke-WebRequest "http://localhost:8080/api/v1/tasks-export?status=overdue" -Ou
     "email": "anna@company.ru",
     "full_name": "Анна Смирнова",
     "role": "operator",
+    "email_confirmed": true,
     "created_at": "2026-10-29T09:12:00Z",
     "last_login_at": "2026-10-29T11:03:11Z"
   }
 }
 ```
+
+### PATCH /auth/me
+
+Меняет имя и почту вошедшего сотрудника. Можно передать только одно поле.
+
+| Поле | Описание |
+|---|---|
+| `full_name` | имя и фамилия, 2–120 символов, лишние пробелы схлопываются |
+| `email` | новая рабочая почта; адрес должен быть свободен, иначе `409` |
+
+Смена почты не рвёт сессию и не меняет роль, но адрес становится **неподтверждённым**:
+на него уходит письмо со ссылкой, а `employee.email_confirmed` становится `false`.
+Пока адрес не подтверждён, вход по паролю отвечает `403` — так опечатка в адресе не
+превращается в новую точку входа. Вход по ссылке из письма подтверждает адрес сам.
+
+```json
+PATCH /auth/me
+{ "full_name": "Анна Смирнова", "email": "a.smirnova@company.ru" }
+```
+
+```json
+{
+  "employee": {
+    "id": 1,
+    "email": "a.smirnova@company.ru",
+    "full_name": "Анна Смирнова",
+    "role": "operator",
+    "email_confirmed": false
+  },
+  "email_changed": true,
+  "needs_confirmation": true,
+  "email_status": "sent",
+  "message": "Почта изменена на a.smirnova@company.ru. Подтвердите адрес по ссылке из письма."
+}
+```
+
+Ошибки: `400` — не передано ни одного поля, `401` — нет входа, `409` — адрес занят,
+`422` — адрес не похож на почту или имя короче двух символов.
 
 ## Вход по ссылке на почту
 
@@ -410,6 +509,33 @@ POST /auth/email/start
 ```json
 { "checked_at": "2026-10-30T07:17:10Z", "created": 1, "already": 0, "emails": 1, "items": [ ... ] }
 ```
+
+## POST /api/v1/notifications/test
+
+Проверочное письмо себе — кнопка «Проверить почту» в панели уведомлений.
+Требует входа. Возвращает, куда письмо ушло **на самом деле**.
+
+```json
+{
+  "status": "sent",
+  "detail": "SMTP smtp.yandex.ru:465 (ssl)",
+  "to": "wekimu@vgmale.com",
+  "sent_to": "wekimu@vgmale.com",
+  "redirected": false,
+  "email": { "transport": "smtp", "from": "...", "redirect_to": "bn.4a@yandex.ru" }
+}
+```
+
+| Поле | Смысл |
+|---|---|
+| `to` | адрес сотрудника из профиля |
+| `sent_to` | фактический получатель после демо-переадресации |
+| `redirected` | `true`, если сработала `EMAIL_REDIRECT_TO` |
+| `status` | `sent`, `file` (письмо в `data/outbox`), `failed`, `disabled` |
+
+Панель показывает `sent_to`; при `redirected: true` пишет, что это демо-переадресация
+письма для адреса `to`. Наличие `email.redirect_to` само по себе ничего не значит:
+переадресация применяется только к доменам из `EMAIL_REDIRECT_DOMAINS`.
 
 ## GET /health
 

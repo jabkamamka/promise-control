@@ -10,9 +10,12 @@ from fastapi.responses import JSONResponse
 
 from ..config import settings
 from ..db import get_db
-from ..schemas import CallList, CallOut, IngestResponse, TaskOut
+from ..schemas import ApiFetchOut, CallList, CallOut, IngestResponse, TaskOut
+from ..services import api_source
 from ..services.ingest import ingest_payload, normalize_payload, reanalyze_call
 from ..services.tasks import get_task, list_tasks, mark_overdue
+
+from .auth import require_employee
 
 router = APIRouter(tags=["calls"])
 
@@ -57,6 +60,74 @@ async def _handle_webhook(
 
     result = ingest_payload(conn, payload)
     return IngestResponse(**result)
+
+
+@router.post(
+    "/api/v1/calls/fetch-api",
+    response_model=ApiFetchOut,
+    summary="Подтянуть новые звонки из API партнёра",
+)
+def calls_fetch_api(
+    min_tasks: int = Query(default=10, ge=1, le=100, description="Минимум новых задач"),
+    target_tasks: int = Query(default=15, ge=1, le=100, description="Желаемое число задач"),
+    max_tasks: int = Query(default=20, ge=1, le=100, description="Максимум новых задач"),
+    employee: dict = Depends(require_employee),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> ApiFetchOut:
+    """Берёт свежие расшифровки из API партнёра и создаёт по ним задачи.
+
+    Кнопка «Загрузить ещё из API» в панели: за одно нажатие приходит порция
+    звонков, из которых получается от ``min_tasks`` до ``max_tasks`` новых задач.
+    Повторы отсеиваются по id и по тексту расшифровки — повторное нажатие
+    не плодит дубли, а честно отвечает, что новых записей нет.
+    """
+    if not 1 <= min_tasks <= target_tasks <= max_tasks:
+        raise HTTPException(
+            status_code=400,
+            detail="Нужно 1 ≤ min_tasks ≤ target_tasks ≤ max_tasks",
+        )
+    if not api_source.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Загрузка из API выключена: в .env не задан URALMICRO_SERVICE_TOKEN",
+        )
+
+    try:
+        batch = api_source.fetch_and_ingest(conn, min_tasks, target_tasks, max_tasks)
+    except api_source.ApiSourceError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    result = batch["ingest"]
+    if not result:
+        return ApiFetchOut(
+            fetched=batch["fetched"],
+            skipped=batch["skipped"],
+            min_tasks=min_tasks,
+            max_tasks=max_tasks,
+            message="В API нет новых расшифровок: всё, что он отдаёт, уже загружено",
+        )
+
+    created = result["tasks_created"]
+    short = created < min_tasks
+    message = f"Из API: {len(batch['calls'])} звонков → {created} задач"
+    if short:
+        message += f" (меньше {min_tasks}: свежих расшифровок в API сейчас мало)"
+    print(
+        f"[api] {employee.get('email')}: звонков {len(batch['calls'])}, задач {created}",
+        flush=True,
+    )
+    return ApiFetchOut(
+        fetched=batch["fetched"],
+        skipped=batch["skipped"],
+        selected=len(batch["calls"]),
+        planned=batch["planned"],
+        min_tasks=min_tasks,
+        max_tasks=max_tasks,
+        message=message,
+        **result,
+    )
 
 
 @router.get("/api/v1/calls", response_model=CallList, summary="Список принятых звонков")

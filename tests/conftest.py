@@ -40,6 +40,8 @@ def client():
         conn.executescript(
             "DELETE FROM notifications; DELETE FROM task_events; DELETE FROM tasks; DELETE FROM calls;"
             "DELETE FROM sessions; DELETE FROM employees;"
+            "DELETE FROM chat_attachments; DELETE FROM chat_messages; DELETE FROM chat_members;"
+            "DELETE FROM chat_presence; DELETE FROM chat_channels WHERE is_default = 0;"
         )
         conn.execute("DELETE FROM promise_types WHERE is_builtin = 0")
         conn.commit()

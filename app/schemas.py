@@ -53,6 +53,25 @@ class IngestResponse(BaseModel):
     calls: list[IngestCallResult]
 
 
+class ApiFetchOut(BaseModel):
+    """Итог кнопки «Загрузить ещё из API»."""
+
+    fetched: int = 0
+    skipped: int = 0
+    selected: int = 0
+    planned: int = 0
+    received: int = 0
+    processed: int = 0
+    duplicates: int = 0
+    failed: int = 0
+    tasks_created: int = 0
+    tasks_verified: int = 0
+    min_tasks: int = 10
+    max_tasks: int = 20
+    message: str = ""
+    calls: list[IngestCallResult] = Field(default_factory=list)
+
+
 class TaskOut(BaseModel):
     id: str
     call_id: str

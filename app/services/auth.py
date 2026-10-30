@@ -195,6 +195,53 @@ def login(conn: sqlite3.Connection, email: str, password: str) -> dict[str, Any]
     return _promote_admin(conn, employee)
 
 
+def update_profile(
+    conn: sqlite3.Connection,
+    employee: dict[str, Any],
+    full_name: str | None = None,
+    email: str | None = None,
+) -> tuple[dict[str, Any], bool]:
+    """Меняет имя и почту сотрудника. Возвращает (запись, менялась ли почта).
+
+    Имя применяется сразу. Почта — только на свободный адрес и остаётся
+    неподтверждённой до перехода по ссылке из письма: адрес — это логин, поэтому
+    опечатка не должна тихо становиться новой точкой входа. Сессии при этом
+    не рвутся: сотрудник остаётся в панели и может исправить адрес ещё раз.
+    """
+    changes: dict[str, Any] = {}
+
+    if full_name is not None:
+        name = normalize_name(full_name)
+        if name != employee["full_name"]:
+            changes["full_name"] = name
+
+    email_changed = False
+    if email is not None:
+        new_email = normalize_email(email)
+        if new_email != str(employee["email"]).lower():
+            taken = employee_by_email(conn, new_email)
+            if taken and taken["id"] != employee["id"]:
+                raise AuthError("Этот адрес уже занят другим сотрудником", 409)
+            changes["email"] = new_email
+            changes["email_confirmed_at"] = None
+            email_changed = True
+
+    if changes:
+        assignments = ", ".join(f"{column} = ?" for column in changes)
+        try:
+            conn.execute(
+                f"UPDATE employees SET {assignments} WHERE id = ?",
+                (*changes.values(), employee["id"]),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError as error:  # гонка двух одновременных смен
+            conn.rollback()
+            raise AuthError("Этот адрес уже занят другим сотрудником", 409) from error
+
+    row = conn.execute("SELECT * FROM employees WHERE id = ?", (employee["id"],)).fetchone()
+    return (dict(row) if row else dict(employee)), email_changed
+
+
 def change_password(conn: sqlite3.Connection, employee: dict[str, Any], current: str, new: str) -> None:
     if not verify_password(current, employee["password_hash"]):
         raise AuthError("Текущий пароль неверен", 401)

@@ -27,6 +27,21 @@ app/api/tasks.py, types.py, system.py   HTTP-слой
 app/web/                    панель оператора (ванильный JS)
 ```
 
+Необязательная ветка — кнопка «Загрузить ещё из API»:
+
+```
+app/web/app.js ──► POST /api/v1/calls/fetch-api
+                        │
+                        ▼
+app/services/api_source.py   порции из API, отсев повторов по id и тексту
+                        │
+                        ▼
+app/services/ingest.py       дальше тот же путь, что у вебхука
+```
+
+Без `URALMICRO_SERVICE_TOKEN` и без сети ветка отвечает 502/503: основной поток
+(приём звонков от отправителя) от неё не зависит.
+
 ## Слой поиска обещаний (detect.py)
 
 ### 1. Только оператор

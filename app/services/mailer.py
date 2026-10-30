@@ -26,6 +26,10 @@ from ..config import settings
 class MailResult(NamedTuple):
     status: str  # sent | file | failed | disabled
     detail: str = ""
+    #: Куда письмо ушло на самом деле (с учётом демо-переадресации).
+    recipient: str = ""
+    #: Сработала ли переадресация на EMAIL_REDIRECT_TO.
+    redirected: bool = False
 
 
 #: Настройки популярных почт: хост, порт и тип шифрования.
@@ -149,18 +153,20 @@ def _should_redirect(recipient: str, redirect: str, domains: str) -> bool:
 def send(to: str, subject: str, text: str, html: str | None = None) -> MailResult:
     """Отправляет письмо. Исключений не бросает."""
     mode = transport()
-    if mode == "disabled":
-        return MailResult("disabled", "отправка почты выключена")
-
     original = (to or "").strip()
+    if mode == "disabled":
+        return MailResult("disabled", "отправка почты выключена", original)
+
     if not original:
         return MailResult("failed", "у сотрудника не указан email")
 
     recipient = original
+    redirected = False
     note = ""
     if _should_redirect(original, settings.email_redirect_to, settings.email_redirect_domains):
         # Демо: письма на условные адреса идут на один реальный ящик.
         recipient = settings.email_redirect_to
+        redirected = True
         note = f"\n\n—\nДемо-переадресация: письмо предназначалось {original}"
 
     message = _build_message(recipient, subject, text + note, html)
@@ -169,13 +175,13 @@ def send(to: str, subject: str, text: str, html: str | None = None) -> MailResul
         try:
             path = _write_to_outbox(message, recipient)
         except OSError as exc:
-            return MailResult("failed", f"не удалось записать письмо: {exc}")
-        return MailResult("file", path)
+            return MailResult("failed", f"не удалось записать письмо: {exc}", recipient, redirected)
+        return MailResult("file", path, recipient, redirected)
 
-    return _send_smtp(message, recipient)
+    return _send_smtp(message, recipient, redirected)
 
 
-def _send_smtp(message: EmailMessage, recipient: str) -> MailResult:
+def _send_smtp(message: EmailMessage, recipient: str, redirected: bool = False) -> MailResult:
     host, port, security = smtp_config()
     context = ssl.create_default_context()
     try:
@@ -195,11 +201,14 @@ def _send_smtp(message: EmailMessage, recipient: str) -> MailResult:
             server.send_message(message, from_addr=_bare_address(settings.email_from), to_addrs=[recipient])
     except smtplib.SMTPAuthenticationError:
         return MailResult(
-            "failed", "логин или пароль приложения не подошли — проверьте SMTP_USER и SMTP_PASSWORD"
+            "failed",
+            "логин или пароль приложения не подошли — проверьте SMTP_USER и SMTP_PASSWORD",
+            recipient,
+            redirected,
         )
     except (smtplib.SMTPException, OSError) as exc:
-        return MailResult("failed", f"SMTP {host}:{port}: {exc}")
-    return MailResult("sent", f"SMTP {host}:{port} ({security})")
+        return MailResult("failed", f"SMTP {host}:{port}: {exc}", recipient, redirected)
+    return MailResult("sent", f"SMTP {host}:{port} ({security})", recipient, redirected)
 
 
 def _bare_address(value: str) -> str:

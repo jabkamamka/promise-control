@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f2eee5" />
+    <meta name="color-scheme" content="light" />
+    <title>Мессенджер — контроль обещаний</title>
+    <link rel="stylesheet" href="/static/styles.css?v=12" />
+    <link rel="stylesheet" href="/static/chat.css?v=1" />
+  </head>
+  <body class="chat-page">
+    <a class="skip-link" href="#composerInput">Перейти к полю ввода</a>
+
+    <header class="chat-topbar">
+      <div class="chat-topbar-inner">
+        <a class="chat-brand" href="/" aria-label="Вернуться на панель контроля обещаний">
+          <span class="logo chat-logo" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path
+                d="M9 26h7l4.5-12 6.5 23 5-15h7"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle cx="39" cy="22" r="2.8" fill="#ff5a1f" />
+            </svg>
+          </span>
+          <span class="chat-brand-copy">
+            <span class="chat-brand-eyebrow">UralMicro <i>/</i> рабочее пространство</span>
+            <span class="chat-brand-title">Внутренний <em>мессенджер</em></span>
+          </span>
+        </a>
+
+        <div class="chat-topbar-right">
+          <span class="chat-connection" id="connectionState" title="Связь с сервером">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span id="connectionText">на связи</span>
+          </span>
+          <a class="chat-back" href="/">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="7" height="7" rx="1.4"></rect>
+              <rect x="13.5" y="3.5" width="7" height="7" rx="1.4"></rect>
+              <rect x="3.5" y="13.5" width="7" height="7" rx="1.4"></rect>
+              <rect x="13.5" y="13.5" width="7" height="7" rx="1.4"></rect>
+            </svg>
+            <span>На панель</span>
+          </a>
+          <div class="chat-me" id="chatMe" aria-live="polite"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="messenger" id="messenger">
+      <aside class="chat-sidebar" aria-label="Диалоги">
+        <div class="sidebar-top">
+          <div class="sidebar-heading">
+            <div>
+              <p class="eyebrow">Переписка</p>
+              <p class="sidebar-count" id="sidebarCount">Диалоги</p>
+            </div>
+            <button class="primary new-chat-btn" id="newChat" type="button">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+              <span>Новый чат</span>
+            </button>
+          </div>
+
+          <label class="chat-search" for="convSearch">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4.5 4.5"></path>
+            </svg>
+            <span class="sr-only">Поиск по чатам и сообщениям</span>
+            <input
+              id="convSearch"
+              type="search"
+              placeholder="Поиск по чатам и сообщениям"
+              autocomplete="off"
+              maxlength="200"
+            />
+            <button class="search-clear hidden" id="convSearchClear" type="button" aria-label="Очистить поиск">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12"></path>
+                <path d="M18 6 6 18"></path>
+              </svg>
+            </button>
+          </label>
+
+          <p class="sidebar-totals" id="sidebarTotals" hidden></p>
+        </div>
+
+        <div class="conv-scroll" id="convScroll">
+          <div id="convList" class="conv-list" aria-label="Список диалогов"></div>
+          <div id="searchPanel" class="search-panel hidden" aria-live="polite"></div>
+        </div>
+
+        <footer class="sidebar-foot">
+          <div class="sidebar-foot-copy">
+            <span class="sidebar-foot-title">Рабочая переписка</span>
+            <span class="sidebar-foot-note">Только для сотрудников · история в базе компании</span>
+          </div>
+        </footer>
+      </aside>
+
+      <section class="chat-main" id="chatMain" aria-label="Сообщения">
+        <div class="chat-empty" id="chatEmpty">
+          <p class="eyebrow">Внутренняя связь</p>
+          <h2>С кем<br />поговорим?</h2>
+          <p class="chat-empty-lead">
+            Личные диалоги, группы смен и общие каналы. Всё, что обсудили, остаётся в рабочем
+            контуре — без внешних мессенджеров.
+          </p>
+          <div class="chat-empty-channels" id="emptyChannels"></div>
+          <p class="chat-empty-hint">
+            <kbd>Enter</kbd> отправить · <kbd>Shift</kbd> + <kbd>Enter</kbd> новая строка
+          </p>
+        </div>
+
+        <div class="chat-workspace hidden" id="chatWorkspace">
+          <header class="chat-head">
+            <button class="icon-btn back-btn" id="backToChats" type="button" aria-label="К списку диалогов">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M19 12H5"></path>
+                <path d="m11 18-6-6 6-6"></path>
+              </svg>
+            </button>
+            <div class="chat-head-avatar" id="headAvatar"></div>
+            <div class="chat-head-copy">
+              <h2 id="chatTitle">Диалог</h2>
+              <p id="chatSubtitle">—</p>
+            </div>
+            <div class="chat-head-actions">
+              <button class="icon-btn" id="toggleSearch" type="button" aria-label="Поиск в диалоге" title="Поиск в диалоге">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5"></circle>
+                  <path d="m16 16 4.5 4.5"></path>
+                </svg>
+              </button>
+              <button class="icon-btn" id="toggleDetails" type="button" aria-label="Участники" aria-expanded="false" title="Участники">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="9" cy="8" r="3.2"></circle>
+                  <path d="M3.5 19c0-3 2.4-5 5.5-5s5.5 2 5.5 5"></path>
+                  <path d="M16 5.4a3.1 3.1 0 0 1 0 5.9"></path>
+                  <path d="M17.6 14.4c1.9.6 3.1 2.3 3.1 4.6"></path>
+                </svg>
+              </button>
+              <div class="chat-menu-wrap">
+                <button class="icon-btn" id="chatMenuBtn" type="button" aria-label="Действия с диалогом" aria-expanded="false">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="5" cy="12" r="1.4"></circle>
+                    <circle cx="12" cy="12" r="1.4"></circle>
+                    <circle cx="19" cy="12" r="1.4"></circle>
+                  </svg>
+                </button>
+                <div class="chat-menu hidden" id="chatMenu" role="menu"></div>
+              </div>
+            </div>
+          </header>
+
+          <div class="chat-search-bar hidden" id="chatSearchBar">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4.5 4.5"></path>
+            </svg>
+            <label class="sr-only" for="chatSearchInput">Поиск в диалоге</label>
+            <input id="chatSearchInput" type="search" placeholder="Найти сообщение в этом диалоге" autocomplete="off" />
+            <button class="text-btn" id="chatSearchClose" type="button">Закрыть</button>
+          </div>
+          <div class="chat-search-results hidden" id="chatSearchResults" aria-live="polite"></div>
+
+          <div class="message-scroll" id="messageScroll" tabindex="0">
+            <div class="messages" id="messages" aria-label="Сообщения"></div>
+            <button class="jump-latest hidden" id="jumpLatest" type="button">
+              Новые сообщения
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="m6 13 6 6 6-6"></path>
+              </svg>
+            </button>
+            <div class="messages-loader hidden" id="messagesLoader" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div class="typing-line" id="typingLine" aria-live="polite"></div>
+
+          <form class="composer" id="composer" autocomplete="off">
+            <div class="composer-banner hidden" id="replyBanner"></div>
+            <div class="composer-attachment hidden" id="attachmentChip"></div>
+
+            <div class="composer-row">
+              <button class="icon-btn composer-tool" id="attachBtn" type="button" aria-label="Прикрепить файл" title="Прикрепить файл">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 11.5 12.3 19a5 5 0 0 1-7-7l7.4-7.4a3.4 3.4 0 0 1 4.8 4.8l-7.4 7.4a1.8 1.8 0 0 1-2.6-2.6l6.8-6.8"></path>
+                </svg>
+              </button>
+              <input id="fileInput" type="file" hidden />
+              <button class="icon-btn composer-tool" id="emojiBtn" type="button" aria-label="Эмодзи" title="Эмодзи" aria-expanded="false">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8.5"></circle>
+                  <path d="M8.5 14.5a4.2 4.2 0 0 0 7 0"></path>
+                  <path d="M9 9.6v.1"></path>
+                  <path d="M15 9.6v.1"></path>
+                </svg>
+              </button>
+              <div class="emoji-pop hidden" id="emojiPop" aria-label="Эмодзи"></div>
+
+              <label class="sr-only" for="composerInput">Сообщение</label>
+              <textarea
+                id="composerInput"
+                rows="1"
+                maxlength="4000"
+                placeholder="Написать сообщение…"
+                aria-describedby="composerHint"
+              ></textarea>
+
+              <button class="primary composer-send" id="sendBtn" type="submit" aria-label="Отправить" title="Отправить (Enter)">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 12 20 4l-4.5 16-4-6.5L4 12Z"></path>
+                  <path d="m11.5 13.5 4-4"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div class="composer-foot">
+              <span id="composerHint">Enter — отправить · Shift + Enter — новая строка</span>
+              <span class="composer-limit" id="composerLimit"></span>
+              <button class="text-btn hidden" id="cancelEdit" type="button">Отменить редактирование</button>
+            </div>
+
+            <div class="mention-pop hidden" id="mentionPop" role="listbox" aria-label="Упомянуть сотрудника"></div>
+          </form>
+        </div>
+      </section>
+
+      <aside class="chat-details" id="details" aria-label="Участники диалога" hidden></aside>
+    </main>
+
+    <div class="chat-modal hidden" id="newChatModal" role="dialog" aria-modal="true" aria-labelledby="newChatTitle">
+      <div class="chat-modal-box">
+        <div class="chat-modal-head">
+          <div>
+            <p class="eyebrow" id="newChatEyebrow">Новый разговор</p>
+            <h2 id="newChatTitle">Кому написать?</h2>
+            <p class="chat-modal-sub" id="newChatSub">Выберите сотрудника — откроется личный диалог.</p>
+          </div>
+          <button class="icon-btn" id="closeNewChat" type="button" aria-label="Закрыть">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="newchat-tabs" id="newChatTabs" role="tablist" aria-label="Тип разговора">
+          <button class="newchat-tab active" type="button" data-kind="direct" role="tab" aria-selected="true">Личный</button>
+          <button class="newchat-tab" type="button" data-kind="group" role="tab" aria-selected="false">Группа</button>
+        </div>
+
+        <div class="newchat-body">
+          <label class="group-title-field hidden" id="groupTitleWrap" for="groupTitle">
+            <span>Название группы</span>
+            <input id="groupTitle" maxlength="80" placeholder="Например: Смена 12 октября" />
+          </label>
+
+          <label class="people-search" for="peopleSearch">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4.5 4.5"></path>
+            </svg>
+            <span class="sr-only">Поиск сотрудника</span>
+            <input id="peopleSearch" type="search" placeholder="Найти сотрудника" autocomplete="off" />
+          </label>
+
+          <div class="people-list" id="peopleList" aria-live="polite"></div>
+        </div>
+
+        <div class="chat-modal-foot">
+          <p class="newchat-hint" id="newChatHint">Можно начать с одного человека.</p>
+          <button class="primary" id="createChat" type="button" disabled>Открыть диалог</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="/static/chat.js?v=1"></script>
+  </body>
+</html>

@@ -49,6 +49,13 @@ class EmailOnlyIn(BaseModel):
     email: str
 
 
+class ProfileIn(BaseModel):
+    """Смена имени и почты: можно передать только то, что меняется."""
+
+    full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    email: str | None = None
+
+
 def current_employee(request: Request, conn: sqlite3.Connection = Depends(get_db)) -> dict | None:
     return auth.employee_by_session(conn, request.cookies.get(COOKIE))
 
@@ -216,6 +223,49 @@ def email_code_login(
 @router.get("/me", summary="Текущий сотрудник")
 def me(employee: dict | None = Depends(current_employee)):
     return {"employee": auth.public_employee(employee)}
+
+
+@router.patch("/me", summary="Изменить имя и почту")
+def update_me(
+    payload: ProfileIn,
+    employee: dict = Depends(require_employee),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Меняет имя и почту вошедшего сотрудника.
+
+    Смена почты переводит адрес в неподтверждённое состояние и отправляет ссылку
+    подтверждения на новый ящик: адрес — это логин. Сессия при этом сохраняется.
+    """
+    if payload.full_name is None and payload.email is None:
+        raise HTTPException(status_code=400, detail="Нечего менять: передайте имя или почту")
+    try:
+        updated, email_changed = auth.update_profile(
+            conn, employee, payload.full_name, payload.email
+        )
+    except auth.AuthError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message)
+
+    result = {
+        "employee": auth.public_employee(updated),
+        "email_changed": email_changed,
+        "needs_confirmation": bool(email_changed),
+        "email_status": None,
+        "message": "Профиль обновлён",
+    }
+    if not email_changed:
+        return result
+
+    token, _code = auth.issue_confirmation(conn, updated)
+    link = f"{settings.public_base_url.rstrip('/')}/auth/email/confirm?token={token}"
+    sent = mailer.send_confirm_link(updated["email"], link, auth.CONFIRM_MINUTES // 60)
+    result["email_status"] = sent.status
+    result["email_detail"] = sent.detail
+    result["message"] = (
+        f"Почта изменена на {updated['email']}. Подтвердите адрес по ссылке из письма."
+    )
+    if sent.status == "file":
+        result["dev_link"] = link
+    return result
 
 
 @router.post("/password", summary="Смена пароля")

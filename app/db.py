@@ -9,7 +9,7 @@ from .config import settings
 from .services.taxonomy import BUILTIN_TYPES
 from .utils import utc_now
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -136,6 +136,63 @@ CREATE TABLE IF NOT EXISTS login_tokens (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_login_tokens_email ON login_tokens(email, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_channels (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind        TEXT NOT NULL DEFAULT 'channel',
+    slug        TEXT UNIQUE,
+    title       TEXT NOT NULL DEFAULT '',
+    topic       TEXT NOT NULL DEFAULT '',
+    created_by  INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL,
+    is_default  INTEGER NOT NULL DEFAULT 0,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    direct_key  TEXT UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS chat_members (
+    channel_id   INTEGER NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
+    employee_id  INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'member',
+    joined_at    TEXT NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    muted        INTEGER NOT NULL DEFAULT 0,
+    typing_at    TEXT,
+    PRIMARY KEY (channel_id, employee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_members_employee ON chat_members(employee_id);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id INTEGER NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
+    sender_id  INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    kind       TEXT NOT NULL DEFAULT 'text',
+    body       TEXT NOT NULL DEFAULT '',
+    reply_to   INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
+    mentions   TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    edited_at  TEXT,
+    deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_id);
+
+CREATE TABLE IF NOT EXISTS chat_attachments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id  INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+    filename    TEXT NOT NULL,
+    stored_name TEXT NOT NULL,
+    mime        TEXT NOT NULL DEFAULT 'application/octet-stream',
+    size        INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_attachments(message_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_attachments_once ON chat_attachments(message_id);
+
+CREATE TABLE IF NOT EXISTS chat_presence (
+    employee_id  INTEGER PRIMARY KEY REFERENCES employees(id) ON DELETE CASCADE,
+    last_seen_at TEXT NOT NULL
+);
 """
 
 
@@ -262,6 +319,9 @@ def init_db() -> None:
                 ),
             )
         promote_admins(conn)
+        from .services import chat as chat_service
+
+        chat_service.ensure_default_channels(conn)
         conn.commit()
 
 

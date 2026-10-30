@@ -8,13 +8,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import analytics, auth as auth_api, calls, notifications as notifications_api, system, tasks, types
+from .api import analytics, auth as auth_api, calls, chat as chat_api, notifications as notifications_api, system, tasks, types
 from .config import settings
 from .db import connect, init_db
 from .services import auth as auth_service
+from .services import chat as chat_service
 from .services import notifications as notify_service
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -127,6 +128,13 @@ app.include_router(system.router)
 app.include_router(analytics.router)
 app.include_router(auth_api.router)
 app.include_router(notifications_api.router)
+app.include_router(chat_api.router)
+
+
+@app.exception_handler(chat_service.ChatError)
+async def chat_error_handler(request: Request, exc: chat_service.ChatError):
+    """Ошибки мессенджера возвращаем в том же формате, что и остальной API."""
+    return JSONResponse({"detail": exc.message}, status_code=exc.status)
 
 if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
@@ -148,6 +156,14 @@ def analytics_page(request: Request):
     if employee.get("role") != "admin":
         return RedirectResponse("/?denied=analytics", status_code=303)
     return FileResponse(WEB_DIR / "analytics.html")
+
+
+@app.get("/chat", include_in_schema=False)
+def chat_page(request: Request):
+    """Внутренний мессенджер — только для сотрудников."""
+    if not _current_employee(request):
+        return RedirectResponse("/login?next=/chat", status_code=303)
+    return FileResponse(WEB_DIR / "chat.html")
 
 
 @app.get("/login", include_in_schema=False)

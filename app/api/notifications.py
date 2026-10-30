@@ -67,5 +67,7 @@ def send_test_email(employee: dict = Depends(require_employee)) -> dict:
         "status": result.status,
         "detail": result.detail,
         "to": employee["email"],
+        "sent_to": result.recipient or employee["email"],
+        "redirected": bool(result.redirected),
         "email": mailer.describe(),
     }

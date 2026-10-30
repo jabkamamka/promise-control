@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f2eee5" />
     <meta name="color-scheme" content="light" />
     <title>Контроль обещаний — панель оператора</title>
-    <link rel="stylesheet" href="/static/styles.css?v=11" />
+    <link rel="stylesheet" href="/static/styles.css?v=13" />
   </head>
   <body>
     <a class="skip-link" href="#taskList">Перейти к задачам</a>
@@ -100,6 +100,21 @@
               <span>Обновить</span>
             </button>
 
+            <button
+              id="loadFromApi"
+              class="ghost"
+              type="button"
+              title="Подтянуть из API партнёра 10–20 новых задач"
+            >
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 17.5a4 4 0 0 1-.4-8A5.5 5.5 0 0 1 17.2 11 3.4 3.4 0 0 1 17 17.5"></path>
+                <path d="M12 11.5v8"></path>
+                <path d="m9 16.5 3 3 3-3"></path>
+              </svg>
+              <span class="label-wide">Загрузить ещё из API</span>
+              <span class="label-compact">Из API</span>
+            </button>
+
             <button id="openTypes" class="ghost toolbar-strong" type="button" aria-label="Типы обещаний">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m12 3 9 5-9 5-9-5 9-5Z"></path>
@@ -122,6 +137,17 @@
             </button>
 
             <button id="myTasks" class="ghost hidden" type="button" aria-pressed="false">Мои задачи</button>
+
+            <button id="openChat" class="ghost chat-open-btn" type="button" aria-label="Внутренний мессенджер">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.4-4.6A7.5 7.5 0 1 1 20 11.5Z"></path>
+                <path d="M8.5 11.5h.1"></path>
+                <path d="M12 11.5h.1"></path>
+                <path d="M15.5 11.5h.1"></path>
+              </svg>
+              <span class="label-wide">Чат</span>
+              <span id="chatBadge" class="notif-badge chat-badge" hidden>0</span>
+            </button>
 
             <div class="notif-wrap">
               <button
@@ -260,7 +286,41 @@
       </div>
     </div>
 
+    <div class="modal hidden" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+      <div class="modal-box modal-box-narrow">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Профиль</p>
+            <h2 id="profileTitle">Имя и почта</h2>
+            <p class="modal-meta">Почта — это логин и адрес, куда приходят письма о сроках.</p>
+          </div>
+          <button class="icon-btn" id="closeProfile" type="button" aria-label="Закрыть профиль">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <form class="profile-form" id="profileForm">
+          <div class="form-row">
+            <label for="profileName">Имя и фамилия</label>
+            <input id="profileName" required minlength="2" maxlength="120" autocomplete="name" />
+          </div>
+          <div class="form-row">
+            <label for="profileEmail">Рабочая почта</label>
+            <input id="profileEmail" type="email" required autocomplete="email" />
+            <p class="form-hint" id="profileEmailState"></p>
+          </div>
+          <div class="profile-actions">
+            <button class="ghost" id="cancelProfile" type="button">Отмена</button>
+            <button class="primary" id="saveProfile" type="submit">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=13"></script>
+    <script src="/static/app.js?v=15"></script>
   </body>
 </html>

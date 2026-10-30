@@ -65,6 +65,11 @@ class Settings:
     #: Необязательный общий секрет для вебхука: если задан, требуется заголовок X-Webhook-Token.
     webhook_token: str | None = os.environ.get("WEBHOOK_TOKEN") or None
 
+    #: API партнёра: откуда кнопка «Загрузить ещё из API» берёт свежие расшифровки.
+    #: Без токена кнопка отключена, остальной сервис работает как обычно.
+    api_base: str = os.environ.get("URALMICRO_API_BASE", "https://utmn-api.uralmicro.ru/api/v1")
+    api_service_token: str = os.environ.get("URALMICRO_SERVICE_TOKEN", "").strip()
+
     #: Необязательный LLM (OpenAI-совместимый). По умолчанию выключен.
     llm_enabled: bool = _env_bool("LLM_ENABLED", False)
     llm_base_url: str = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -85,6 +90,11 @@ class Settings:
 
     #: Публичный адрес сервиса: подставляется в ссылки внутри писем.
     public_base_url: str = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
+
+    #: Внутренний мессенджер: куда складывать вложения и какие ограничения держать.
+    chat_upload_dir: str = os.environ.get("CHAT_UPLOAD_DIR", str(BASE_DIR / "data" / "chat"))
+    chat_max_upload_mb: int = _env_int("CHAT_MAX_UPLOAD_MB", 10)
+    chat_message_max_chars: int = _env_int("CHAT_MESSAGE_MAX_CHARS", 4000)
 
     #: Напоминания сотрудникам: за сколько минут до срока и включены ли они.
     reminder_enabled: bool = _env_bool("REMINDER_ENABLED", True)

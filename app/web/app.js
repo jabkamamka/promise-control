@@ -262,12 +262,16 @@ function bindNotifications() {
       if (note) note.textContent = "отправляю…";
       try {
         const data = await api("/api/v1/notifications/test", { method: "POST" });
-        const where = data.email && data.email.redirect_to ? data.email.redirect_to : data.to;
+        const own = data.to || "";
+        const sentTo = data.sent_to || own;
         if (data.status === "sent") {
+          const where = data.redirected
+            ? `${sentTo} (демо-переадресация письма для ${own})`
+            : sentTo;
           if (note) note.textContent = `доставлено на ${where}`;
           toast(`Письмо отправлено на ${where}`);
         } else if (data.status === "file") {
-          if (note) note.textContent = "SMTP не настроен: письмо в data/outbox";
+          if (note) note.textContent = `SMTP не настроен: письмо для ${own} в data/outbox`;
           toast("SMTP не настроен — письмо сохранено в outbox", true);
         } else {
           if (note) note.textContent = data.detail || "не удалось отправить";
@@ -327,8 +331,9 @@ function renderEmployee() {
     const mine = $("myTasks");
     if (mine) mine.classList.remove("hidden");
     box.innerHTML = `
-      <span class="employee-name" title="${esc(state.employee.email)}">${esc(state.employee.full_name)}</span>
+      <button class="employee-name employee-btn" id="openProfile" type="button" title="Профиль: имя и почта">${esc(state.employee.full_name)}</button>
       <button class="ghost" id="logoutBtn" type="button">Выйти</button>`;
+    $("openProfile")?.addEventListener("click", openProfile);
     const button = $("logoutBtn");
     if (button) {
       button.addEventListener("click", async () => {
@@ -626,6 +631,56 @@ async function changeStatus(taskId, status, button) {
   }
 }
 
+/* -------------------------------- профиль -------------------------------- */
+
+function openProfile() {
+  if (!state.employee) return;
+  const modal = $("profileModal");
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  $("profileName").value = state.employee.full_name || "";
+  $("profileEmail").value = state.employee.email || "";
+  const hint = $("profileEmailState");
+  const confirmed = Boolean(state.employee.email_confirmed);
+  hint.textContent = confirmed
+    ? "Адрес подтверждён."
+    : "Адрес не подтверждён: откройте ссылку из письма, иначе вход по паролю не сработает.";
+  hint.classList.toggle("warn", !confirmed);
+  $("profileName").focus();
+  $("profileName").select();
+}
+
+function closeProfile() {
+  const modal = $("profileModal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+  const button = $("saveProfile");
+  if (button.disabled) return;
+  const fullName = $("profileName").value.trim();
+  const email = $("profileEmail").value.trim();
+  button.disabled = true;
+  button.textContent = "Сохраняем…";
+  try {
+    const data = await api("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify({ full_name: fullName, email }),
+    });
+    state.employee = data.employee;
+    renderEmployee();
+    closeProfile();
+    toast(data.message || "Профиль обновлён");
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Сохранить";
+  }
+}
+
 async function openCall(callId) {
   const modal = $("callModal");
   modal.classList.remove("hidden");
@@ -686,6 +741,31 @@ $("search").addEventListener("input", (event) => {
 });
 
 $("refresh").addEventListener("click", refresh);
+
+// «Загрузить ещё из API»: за одно нажатие приходит порция звонков,
+// из которых получается 10–20 новых задач. Пока идёт загрузка, кнопка заблокирована,
+// чтобы двойной клик не отправил два похода в API.
+const loadFromApi = $("loadFromApi");
+if (loadFromApi) {
+  loadFromApi.addEventListener("click", async () => {
+    if (loadFromApi.disabled) return;
+    loadFromApi.disabled = true;
+    loadFromApi.classList.add("is-loading");
+    try {
+      const data = await api(
+        "/api/v1/calls/fetch-api?min_tasks=10&target_tasks=15&max_tasks=20",
+        { method: "POST" }
+      );
+      toast(data.message || `Загружено задач: ${data.tasks_created}`, data.selected === 0);
+      await refresh();
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      loadFromApi.disabled = false;
+      loadFromApi.classList.remove("is-loading");
+    }
+  });
+}
 $("loadMore").addEventListener("click", () => {
   state.offset += state.limit;
   loadTasks(true);
@@ -702,6 +782,13 @@ $("closeTypes").addEventListener("click", () => {
 $("closeCall").addEventListener("click", () => $("callModal").classList.add("hidden"));
 $("callModal").addEventListener("click", (event) => {
   if (event.target.id === "callModal") $("callModal").classList.add("hidden");
+});
+
+$("closeProfile").addEventListener("click", closeProfile);
+$("cancelProfile").addEventListener("click", closeProfile);
+$("profileForm").addEventListener("submit", saveProfile);
+$("profileModal").addEventListener("click", (event) => {
+  if (event.target.id === "profileModal") closeProfile();
 });
 
 $("typeForm").addEventListener("submit", async (event) => {
@@ -829,7 +916,10 @@ function initLiveUI() {
         target.tagName === "TEXTAREA" ||
         target.tagName === "SELECT" ||
         target.isContentEditable);
-    const dialogOpen = !$("callModal").classList.contains("hidden") || $("typesDrawer").classList.contains("open");
+    const dialogOpen =
+      !$("callModal").classList.contains("hidden") ||
+      !$("profileModal").classList.contains("hidden") ||
+      $("typesDrawer").classList.contains("open");
 
     if (event.key === "/" && !typing && !dialogOpen && !event.metaKey && !event.ctrlKey && !event.altKey) {
       event.preventDefault();
@@ -839,6 +929,10 @@ function initLiveUI() {
     }
 
     if (event.key === "Escape") {
+      if (!$("profileModal").classList.contains("hidden")) {
+        closeProfile();
+        return;
+      }
       if (!$("callModal").classList.contains("hidden")) {
         $("closeCall").click();
         return;
@@ -862,6 +956,30 @@ function initLiveUI() {
 
 initLiveUI();
 
+/* -------------------------------- мессенджер ------------------------------ */
+
+async function loadChatSummary() {
+  const badge = $("chatBadge");
+  if (!badge) return;
+  try {
+    const summary = await api("/chat/summary");
+    const unread = Number(summary.unread) || 0;
+    badge.textContent = unread > 9 ? "9+" : String(unread);
+    badge.hidden = unread === 0;
+    badge.classList.toggle("mentions", Boolean(summary.mentions));
+  } catch (error) {
+    /* счётчик не должен мешать работе панели */
+  }
+}
+
+const chatButton = document.getElementById("openChat");
+if (chatButton) {
+  chatButton.addEventListener("click", () => {
+    window.location.href = "/chat";
+  });
+}
+
+
 /* ---------------------------------- старт --------------------------------- */
 
 // Переход на страницу аналитики.
@@ -878,6 +996,9 @@ if (analyticsButton) {
   await loadTypes();
   await refresh();
   setInterval(loadStats, 30000);
+
+  loadChatSummary();
+  setInterval(loadChatSummary, 20000);
 
   bindNotifications();
   await loadNotifications();

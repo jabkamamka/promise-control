@@ -1,6 +1,11 @@
-"""Тесты переадресации писем по домену."""
+"""Тесты переадресации писем по домену и фактического адреса доставки."""
 from __future__ import annotations
 
+import dataclasses
+
+import pytest
+
+from app.services import mailer
 from app.services.mailer import _should_redirect
 
 
@@ -23,3 +28,34 @@ def test_redirect_only_listed_domains():
 
 def test_redirect_ignores_whitespace_and_case():
     assert _should_redirect("a@example.com", "demo@yandex.ru", " EXample.com , ") is True
+
+
+@pytest.fixture()
+def redirect_settings(monkeypatch):
+    """Демо-переадресация на демо-ящик, только для example.com."""
+    replaced = dataclasses.replace(
+        mailer.settings,
+        email_transport="file",
+        email_enabled=True,
+        email_redirect_to="bn.4a@yandex.ru",
+        email_redirect_domains="example.com",
+    )
+    monkeypatch.setattr(mailer, "settings", replaced)
+    return replaced
+
+
+def test_send_reports_real_recipient_when_redirect_does_not_apply(redirect_settings):
+    """Реальный адрес не из списка демо-доменов: письмо идёт туда и так и отчитывается."""
+    result = mailer.send("wekimu@vgmale.com", "Тема", "Текст")
+
+    assert result.status == "file"
+    assert result.recipient == "wekimu@vgmale.com"
+    assert result.redirected is False
+
+
+def test_send_reports_redirect_target_when_redirect_applies(redirect_settings):
+    result = mailer.send("maria@example.com", "Тема", "Текст")
+
+    assert result.status == "file"
+    assert result.recipient == "bn.4a@yandex.ru"
+    assert result.redirected is True
