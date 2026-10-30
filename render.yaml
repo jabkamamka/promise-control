@@ -1,0 +1,43 @@
+# Render Blueprint для сервиса контроля обещаний.
+# Как применить: Render Dashboard -> New -> Blueprint -> выбрать репозиторий с этим файлом.
+# Справочник полей: https://render.com/docs/blueprint-spec
+#
+# Важно про данные: сервис хранит состояние в SQLite-файле. На бесплатном плане
+# Render файловая система эфемерна — база стирается при каждом рестарте, передеплое
+# и засыпании сервиса. Для демо это приемлемо, для реальных звонков — нет.
+
+services:
+  - type: web
+    name: promise-service
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+
+    envVars:
+      # Путь к SQLite внутри контейнера. Каталог создаётся в Dockerfile.
+      - key: DATABASE_PATH
+        value: /app/data/promises.db
+      # Часовой пояс, в котором трактуются сроки («завтра до обеда»).
+      - key: APP_TIMEZONE
+        value: Asia/Yekaterinburg
+      # Если раскомментировать, вебхук потребует заголовок X-Webhook-Token.
+      # Значение в репозитории не храним: sync: false заставит Render спросить его
+      # при создании сервиса и хранить только в панели.
+      # - key: WEBHOOK_TOKEN
+      #   sync: false
+
+    # ЧЕСТНО ПРО ДИСК.
+    # Persistent disk на Render подключается только к сервисам на платном плане;
+    # у free-инстансов диска нет вообще, поэтому блок ниже закомментирован: с ним
+    # Blueprint на плане free не создастся. То есть в текущей конфигурации
+    # /app/data/promises.db живёт в контейнере и исчезает при рестарте/спин-дауне.
+    # Нужны данные между рестартами — либо платный план и раскомментированный блок,
+    # либо внешняя БД (PostgreSQL): сейчас код рассчитан только на SQLite.
+    # disk:
+    #   name: promise-data
+    #   mountPath: /app/data
+    #   sizeGB: 1

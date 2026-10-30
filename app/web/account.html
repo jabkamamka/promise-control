@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Личный кабинет — Контроль обещаний</title>
+<link rel="stylesheet" href="/static/styles.css">
+<style>
+  .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 60px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-top: 16px; }
+  .card h2 { font-size: 17px; margin-bottom: 8px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.free { background: #fef3c7; color: #92400e; }
+  .badge.pro { background: #d1fae5; color: #065f46; }
+  .err { color: var(--danger); font-size: 13px; }
+  .ok { color: var(--ok); font-size: 13px; }
+  .task { border-top: 1px solid var(--line); padding: 10px 0; }
+  .task:first-of-type { border-top: 0; }
+  .task .t { font-weight: 600; }
+  .task .q { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .ad-slot { border: 2px dashed #c7cbe0; border-radius: 12px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; margin-top: 16px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p><a href="/">← К панели оператора</a></p>
+  <h1 style="font-size:22px;margin:0 0 4px">Личный кабинет</h1>
+  <p style="color:var(--muted);margin:0">Вход по ссылке из письма или по коду из Telegram-бота.</p>
+
+  <div id="app"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.detail || `Ошибка ${response.status}`);
+  return data;
+}
+
+function loginView(message = "") {
+  return `
+    <div class="card">
+      <h2>Вход по почте</h2>
+      <p class="hint">Придёт ссылка на ${"<b>указанный адрес</b>"}. В dev-режиме (без SMTP) ссылка показывается здесь же.</p>
+      <div class="row">
+        <input id="email" type="email" placeholder="operator@example.com" style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--line);border-radius:10px">
+        <button class="primary" id="sendEmail">Получить ссылку</button>
+      </div>
+      <div id="emailResult" class="hint"></div>
+    </div>
+
+    <div class="card">
+      <h2>Вход по коду из Telegram</h2>
+      <p class="hint">Откройте бота и отправьте <code>/start</code> — он пришлёт шестизначный код.</p>
+      <div class="row">
+        <input id="tgCode" inputmode="numeric" placeholder="123456" style="width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:10px">
+        <button id="claimTg">Войти</button>
+      </div>
+      <div id="tgResult" class="hint"></div>
+    </div>
+
+    ${message ? `<p class="err">${esc(message)}</p>` : ""}
+  `;
+}
+
+function profileView(user, tasks) {
+  const planBadge = user.plan === "pro"
+    ? '<span class="badge pro">PRO — без рекламы</span>'
+    : '<span class="badge free">FREE — с рекламой</span>';
+
+  const taskItems = (tasks.items || []).map((task) => `
+    <div class="task">
+      <div class="t">${esc(task.title || task.promise_type)}</div>
+      <div class="q">«${esc(task.quote)}» · срок ${esc((task.due_at || "").replace("T", " ").slice(0, 16))} · ${esc(task.effective_status || task.status)}</div>
+    </div>`).join("") || `<p class="hint">${esc(tasks.hint || "Задач пока нет")}</p>`;
+
+  return `
+    <div class="card">
+      <h2>Профиль</h2>
+      <p>${user.email ? esc(user.email) : "Telegram: " + esc(user.telegram_id)} — ${planBadge}</p>
+      <div class="row">
+        <input id="operatorId" type="number" placeholder="operator_id, например 7" value="${user.operator_id ?? ""}" style="width:220px;padding:9px 12px;border:1px solid var(--line);border-radius:10px">
+        <button id="saveOperator">Привязать оператора</button>
+        <button id="logout" class="ghost">Выйти</button>
+      </div>
+      <div id="profileResult" class="hint"></div>
+    </div>
+
+    <div class="card">
+      <h2>Подписка</h2>
+      ${user.plan === "pro"
+        ? `<p class="hint">Тариф PRO активен. Реклама в панели не показывается.</p>
+           <div class="row"><button id="cancelSub">Отменить подписку</button></div>`
+        : `<p class="hint">FREE показывает рекламу в панели. PRO убирает её. Это демо-режим: платёжного провайдера нет, деньги не списываются.</p>
+           <div class="row"><button class="primary" id="subscribe">Оформить PRO (демо)</button></div>`}
+      <div id="billingResult" class="hint"></div>
+    </div>
+
+    <div class="card">
+      <h2>Мои обещания</h2>
+      ${taskItems}
+    </div>
+
+    ${user.plan === "free" ? '<div class="ad-slot">Рекламное место (FREE). Оформите PRO, чтобы убрать.</div>' : ""}
+  `;
+}
+
+async function render(message = "") {
+  const me = await api("/api/v1/auth/me");
+  if (!me.authenticated) {
+    $("app").innerHTML = loginView(message);
+    bindLogin();
+    return;
+  }
+  const tasks = await api("/api/v1/me/tasks").catch(() => ({ items: [] }));
+  $("app").innerHTML = profileView(me, tasks);
+  bindProfile();
+}
+
+function bindLogin() {
+  $("sendEmail").addEventListener("click", async () => {
+    const email = $("email").value.trim();
+    $("emailResult").textContent = "Отправляю…";
+    try {
+      const result = await api("/api/v1/auth/email/request", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      if (result.dev_link) {
+        $("emailResult").innerHTML = `SMTP не настроен, ссылка для входа: <a href="${esc(result.dev_link)}">войти</a>`;
+      } else {
+        $("emailResult").textContent = "Письмо отправлено. Проверьте почту.";
+      }
+    } catch (error) {
+      $("emailResult").textContent = error.message;
+    }
+  });
+
+  $("claimTg").addEventListener("click", async () => {
+    try {
+      await api("/api/v1/auth/telegram/claim", {
+        method: "POST",
+        body: JSON.stringify({ code: $("tgCode").value.trim() }),
+      });
+      render();
+    } catch (error) {
+      $("tgResult").textContent = error.message;
+    }
+  });
+}
+
+function bindProfile() {
+  $("saveOperator").addEventListener("click", async () => {
+    const value = $("operatorId").value.trim();
+    try {
+      await api("/api/v1/me", {
+        method: "PATCH",
+        body: JSON.stringify({ operator_id: value ? Number(value) : null }),
+      });
+      $("profileResult").textContent = "Сохранено";
+      render();
+    } catch (error) {
+      $("profileResult").textContent = error.message;
+    }
+  });
+
+  $("logout").addEventListener("click", async () => {
+    await api("/api/v1/auth/logout", { method: "POST" });
+    render();
+  });
+
+  const subscribe = $("subscribe");
+  if (subscribe) {
+    subscribe.addEventListener("click", async () => {
+      const result = await api("/api/v1/billing/subscribe", { method: "POST" });
+      $("billingResult").textContent = result.note || "PRO включён";
+      render();
+    });
+  }
+
+  const cancel = $("cancelSub");
+  if (cancel) {
+    cancel.addEventListener("click", async () => {
+      await api("/api/v1/billing/cancel", { method: "POST" });
+      render();
+    });
+  }
+}
+
+render();
+</script>
+</body>
+</html>

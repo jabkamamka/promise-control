@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
+  <div class="ad-strip" id="adStrip" hidden>
+    <span>Реклама: панель работает в бесплатном тарифе — <a href="/account">оформить PRO</a></span>
+    <button class="ad-close" id="adClose" aria-label="Скрыть рекламу">×</button>
+  </div>
     <header class="topbar">
       <div class="brand">
         <div class="logo">✓</div>
@@ -100,5 +104,6 @@
     <div class="toast" id="toast"></div>
     <script src="/static/app.js"></script>
     <script src="/static/arcade.js"></script>
+    <script src="/static/ads.js"></script>
   </body>
 </html>
