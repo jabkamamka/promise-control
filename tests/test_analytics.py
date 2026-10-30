@@ -1,5 +1,7 @@
+
 """Аналитика и выгрузка CSV: новые методы, существующие не ломают."""
 from __future__ import annotations
+from conftest import login_employee  # noqa: E402
 
 import csv
 import io
@@ -48,6 +50,7 @@ def test_analytics_period_validation(client):
 
 
 def test_analytics_operators_and_close_time(client, sample_calls):
+    login_employee(client)
     _seed(client, sample_calls)
 
     task = client.get("/api/v1/tasks?limit=1").json()["items"][0]

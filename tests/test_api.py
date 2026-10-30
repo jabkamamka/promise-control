@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from conftest import make_call
+from conftest import login_employee, make_call
 
 CALLBACK = [{"speaker": "operator", "text": "Перезвоню вам завтра в десять утра."}]
 DOCS = [{"speaker": "operator", "text": "Отправлю счёт на почту сегодня."}]
@@ -58,6 +58,7 @@ def test_broken_call_does_not_break_batch(client):
 
 
 def test_status_flow_and_events(client):
+    login_employee(client)
     client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
     task = client.get("/api/v1/tasks").json()["items"][0]
     task_id = task["id"]
@@ -73,11 +74,15 @@ def test_status_flow_and_events(client):
     assert done.json()["closed_at"] is not None
 
     events = client.get(f"/api/v1/tasks/{task_id}/events").json()
-    assert [e["to_status"] for e in events] == ["created", "in_progress", "done"]
+    changed = [e["to_status"] for e in events if e["event"] == "status_changed"]
+    assert changed == ["in_progress", "done"]
+    assert any(e["event"] == "created" for e in events)
+    assert any(e["event"] == "taken" for e in events)
     assert events[-1]["comment"] == "Перезвонил"
 
 
 def test_invalid_transition_is_rejected(client):
+    login_employee(client)
     client.post("/webhook/calls", json=make_call("c-1", CALLBACK))
     task_id = client.get("/api/v1/tasks").json()["items"][0]["id"]
 
@@ -87,6 +92,7 @@ def test_invalid_transition_is_rejected(client):
 
 
 def test_unknown_task_returns_404(client):
+    login_employee(client)
     assert client.get("/api/v1/tasks/nope").status_code == 404
     assert client.patch("/api/v1/tasks/nope", json={"status": "in_progress"}).status_code == 404
 
@@ -183,6 +189,7 @@ def test_call_detail_contains_transcript_and_tasks(client):
 
 
 def test_compat_aliases(client):
+    login_employee(client)
     alias = client.post("/calls", json=make_call("c-alias", CALLBACK))
     assert alias.status_code == 200
     assert alias.json()["processed"] == 1

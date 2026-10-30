@@ -81,6 +81,9 @@ class TaskOut(BaseModel):
     verified_at: str | None = None
     verified_call_id: str | None = None
     verification_quote: str | None = None
+    assignee_id: int | None = None
+    assignee_name: str | None = None
+    taken_at: str | None = None
     call_started_at: str | None = None
     call_ended_at: str | None = None
 

@@ -6,10 +6,22 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 import tempfile
 
 os.environ.setdefault("DATABASE_PATH", os.path.join(tempfile.mkdtemp(prefix="promise-test-"), "test.db"))
 os.environ.setdefault("APP_TIMEZONE", "Asia/Yekaterinburg")
+os.environ.setdefault(
+    "EMAIL_OUTBOX", os.path.join(tempfile.mkdtemp(prefix="promise-mail-"), "outbox")
+)
+os.environ["EMAIL_ENABLED"] = "1"
+os.environ["EMAIL_TRANSPORT"] = "file"
+# Никакой переадресации и SMTP из локального .env: письма должны уходить на адрес сотрудника.
+os.environ["EMAIL_REDIRECT_TO"] = ""
+os.environ["SMTP_HOST"] = ""
+os.environ["SMTP_USER"] = ""
+os.environ["SMTP_PASSWORD"] = ""
+os.environ["NOTIFY_ENABLED"] = "0"  # планировщик не должен вмешиваться в тесты
 os.environ.pop("WEBHOOK_TOKEN", None)
 os.environ["LLM_ENABLED"] = "0"
 
@@ -24,7 +36,10 @@ from app.main import app  # noqa: E402
 def client():
     init_db()
     with connect() as conn:
-        conn.executescript("DELETE FROM task_events; DELETE FROM tasks; DELETE FROM calls;")
+        conn.executescript(
+            "DELETE FROM notifications; DELETE FROM task_events; DELETE FROM tasks; DELETE FROM calls;"
+            "DELETE FROM sessions; DELETE FROM employees;"
+        )
         conn.execute("DELETE FROM promise_types WHERE is_builtin = 0")
         conn.commit()
     with TestClient(app) as test_client:
@@ -79,3 +94,24 @@ def make_call(call_id="call-1", transcript=None, ended_at="2033-10-29T10:00:00Z"
         "ended_at": ended_at,
         "transcript": transcript or [],
     }
+
+
+def login_employee(client, email="tester@example.com", name="Тестовый Сотрудник"):
+    """Регистрирует сотрудника и подтверждает почту по ссылке из письма."""
+    response = client.post(
+        "/auth/register",
+        json={"email": email, "password": "secret-pass", "full_name": name},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["needs_confirmation"] is True
+
+    link = data.get("dev_link")
+    assert link, "в файловом режиме ссылка подтверждения должна возвращаться"
+    path = urlparse(link).path + "?" + urlparse(link).query
+    confirmed = client.get(path, follow_redirects=False)
+    assert confirmed.status_code == 303, confirmed.text
+
+    employee = client.get("/auth/me").json()["employee"]
+    assert employee is not None, "после подтверждения должна быть сессия"
+    return employee

@@ -311,11 +311,107 @@ Invoke-WebRequest "http://localhost:8080/api/v1/tasks-export?status=overdue" -Ou
 }
 ```
 
-## GET /health
+## Вход и сотрудники
+
+Сессия — HttpOnly-cookie `sid` на 30 дней. Все методы ниже, кроме `register` и `login`,
+требуют входа; без сессии — `401`.
+
+| Метод | Тело | Ответ |
+|---|---|---|
+| `POST /auth/register` | `{"full_name": "...", "email": "...", "password": "..."}` | `{"employee": {...}}`, ставит cookie |
+| `POST /auth/email/start` | `{"email": "...", "full_name": "..."}` | `{"ok": true, "email_status": "file", "dev_link"?: "..."}` |
+| `GET /auth/email/verify?token=...` | — | `303` в панель и cookie `sid` |
+| `POST /auth/email/verify` | `{"email": "...", "code": "123456"}` | `{"employee": {...}}` |
+| `POST /auth/login` | `{"email": "...", "password": "..."}` | `{"employee": {...}}`, ставит cookie |
+| `POST /auth/logout` | — | `{"ok": true}` |
+| `GET /auth/me` | — | `{"employee": {...}}` или `{"employee": null}` |
+| `POST /auth/password` | `{"current_password": "...", "new_password": "..."}` | `{"ok": true}`, прочие сессии закрываются |
 
 ```json
-{ "status": "ok", "version": "1.0.0", "time": "2026-10-29T11:00:28Z", "database": "sqlite", "timezone": "Asia/Yekaterinburg", "types": 7, "tasks": 189 }
+{
+  "employee": {
+    "id": 1,
+    "email": "anna@company.ru",
+    "full_name": "Анна Смирнова",
+    "role": "operator",
+    "created_at": "2026-10-29T09:12:00Z",
+    "last_login_at": "2026-10-29T11:03:11Z"
+  }
+}
 ```
+
+## Вход по ссылке на почту
+
+```json
+POST /auth/email/start
+{ "email": "ivan@company.ru", "full_name": "Иван Петров" }
+```
+
+```json
+{
+  "ok": true,
+  "email": "ivan@company.ru",
+  "expires_in_minutes": 15,
+  "email_status": "file",
+  "created": true,
+  "employee": { "id": 5, "email": "ivan@company.ru", "full_name": "Иван Петров", "role": "operator" },
+  "dev_link": "http://127.0.0.1:8080/auth/email/verify?token=...",
+  "dev_code": "778073"
+}
+```
+
+Поля `dev_link` и `dev_code` возвращаются только при `EMAIL_TRANSPORT=file`
+(демо без SMTP). Со SMTP их нет — ссылка уходит только в письме.
+
+## GET /api/v1/notifications
+
+Уведомления текущего сотрудника: напоминания о сроках в интерфейсе и копии писем.
+
+```
+?unread=1&limit=20
+```
+
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "task_id": "tsk_3de972650967",
+      "kind": "deadline_soon",
+      "title": "Срок через 28 мин: «Перезвонить вам»",
+      "body": "Срок: 30 октября, 12:46\nИз разговора: «Перезвоню вам через тридцать минут.»",
+      "link": "/?task=tsk_3de972650967",
+      "read_at": null,
+      "email_status": "file",
+      "created_at": "2026-10-30T07:17:10Z"
+    }
+  ],
+  "unread": 1,
+  "email": { "enabled": true, "transport": "file", "from": "Контроль обещаний <no-reply@promise-control.local>", "smtp_host": null }
+}
+```
+
+`kind`: `deadline_soon` (за `REMINDER_MINUTES_BEFORE` до срока) или `overdue` (срок прошёл).
+`email_status`: `sent` (ушло по SMTP), `file` (сохранено в `data/outbox`), `failed`, `disabled`.
+
+## POST /api/v1/notifications/read
+
+```json
+{ "ids": [12] }
+```
+
+Без `ids` отмечает все. Ответ: `{"marked": 1, "unread": 0}`.
+
+## POST /api/v1/notifications/scan
+
+Проверяет сроки прямо сейчас и рассылает уведомления — тот же проход, что делает
+планировщик раз в минуту. Нужен для демонстрации без ожидания.
+
+```json
+{ "checked_at": "2026-10-30T07:17:10Z", "created": 1, "already": 0, "emails": 1, "items": [ ... ] }
+```
+
+## GET /health
 
 ---
 
@@ -329,4 +425,13 @@ Invoke-WebRequest "http://localhost:8080/api/v1/tasks-export?status=overdue" -Ou
 | `IMMEDIATE_MINUTES` | `15` | Срок для «прямо сейчас» |
 | `WEBHOOK_TOKEN` | пусто | Если задан — требуется заголовок `X-Webhook-Token` |
 | `LLM_ENABLED` | `0` | Включает необязательный LLM-адаптер |
+| `EMAIL_ENABLED` | `1` | Включить письма сотрудникам |
+| `EMAIL_TRANSPORT` | `auto` | `auto` / `smtp` / `file` (файлы в `data/outbox`) |
+| `EMAIL_FROM` | `Контроль обещаний <no-reply@...>` | Отправитель |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | пусто / `587` | SMTP-сервер |
+| `SMTP_SECURITY` | `starttls` | `starttls` / `ssl` / `none` |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8080` | База ссылок в письмах |
+| `REMINDER_MINUTES_BEFORE` | `60` | За сколько минут напоминать |
+| `NOTIFY_ENABLED` | `1` | Фоновая рассылка уведомлений |
+| `NOTIFY_INTERVAL_SECONDS` | `60` | Период проверки сроков |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | — | Настройки OpenAI-совместимого API |

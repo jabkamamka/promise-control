@@ -1,5 +1,6 @@
 """Проверка исполнения обещаний по следующим звонкам клиента."""
 from __future__ import annotations
+from conftest import login_employee  # noqa: E402
 
 import sqlite3
 
@@ -278,6 +279,7 @@ def test_replay_does_not_duplicate_verification(client):
 
 
 def test_done_task_is_not_verified(client):
+    login_employee(client)
     client.post("/webhook/calls", json=[_first_call()])
     task = _task_by_call(client, "c-1")
     client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "in_progress"})

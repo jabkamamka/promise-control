@@ -9,6 +9,8 @@ const state = {
   total: 0,
   tz: "Asia/Yekaterinburg",
   loadToken: 0,
+  employee: null,
+  onlyMine: false,
 };
 
 const STATUS_LABELS = {
@@ -48,6 +50,12 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  if (response.status === 401) {
+    // Сессия истекла или её нет — уводим на вход, а не показываем «HTTP 401».
+    const next = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/login?next=${next}`;
+    throw new Error("Нужно войти в систему");
+  }
   if (response.status === 204) return null;
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -87,6 +95,258 @@ function dueLabel(task) {
 }
 
 /* --------------------------------- данные --------------------------------- */
+
+async function loadEmployee() {
+  try {
+    const data = await api("/auth/me");
+    state.employee = data && data.employee ? data.employee : null;
+  } catch (error) {
+    state.employee = null;
+  }
+  renderEmployee();
+}
+
+/* ------------------------------ уведомления ------------------------------ */
+
+const notif = { items: [], unread: 0, email: null, open: false, known: null };
+
+const EMAIL_LABELS = {
+  sent: "письмо отправлено",
+  file: "письмо в outbox",
+  failed: "письмо не ушло",
+  disabled: "без письма",
+};
+
+function renderNotifBadge() {
+  const badge = $("notifBadge");
+  if (!badge) return;
+  badge.textContent = notif.unread > 9 ? "9+" : String(notif.unread);
+  badge.hidden = notif.unread === 0;
+  const button = $("notifBtn");
+  if (button) button.classList.toggle("has-unread", notif.unread > 0);
+}
+
+function notifTime(value) {
+  const date = new Date(value);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  return sameDay
+    ? new Intl.DateTimeFormat("ru-RU", { timeZone: state.tz, hour: "2-digit", minute: "2-digit" }).format(date)
+    : new Intl.DateTimeFormat("ru-RU", { timeZone: state.tz, day: "numeric", month: "short" }).format(date);
+}
+
+function renderNotifications() {
+  const list = $("notifList");
+  if (!list) return;
+  const empty = $("notifEmpty");
+  const foot = $("notifFoot");
+
+  list.innerHTML = notif.items
+    .map(
+      (item) => `
+      <li class="notif-item ${item.read_at ? "" : "unread"} ${item.kind === "overdue" ? "overdue" : ""}"
+          data-notif="${item.id}" data-link="${esc(item.link)}" tabindex="0" role="button">
+        <span class="notif-dot" aria-hidden="true"></span>
+        <span class="notif-body">
+          <span class="notif-title">${esc(item.title)}</span>
+          ${item.body ? `<span class="notif-text">${esc(item.body).replace(/\n/g, "<br />")}</span>` : ""}
+          <span class="notif-meta">${esc(notifTime(item.created_at))} · ${esc(
+            EMAIL_LABELS[item.email_status] || "без письма"
+          )}</span>
+        </span>
+      </li>`
+    )
+    .join("");
+
+  if (empty) empty.hidden = notif.items.length > 0;
+  if (foot) {
+    const mode = notif.email ? notif.email.transport : "disabled";
+    foot.textContent =
+      mode === "smtp"
+        ? "Копии писем уходят на рабочую почту."
+        : mode === "file"
+          ? "Почта не настроена: письма сохраняются в data/outbox."
+          : "Отправка писем выключена.";
+  }
+  renderNotifBadge();
+}
+
+async function loadNotifications({ announce = false } = {}) {
+  try {
+    const data = await api("/api/v1/notifications?limit=20");
+    notif.items = data.items || [];
+    notif.unread = data.unread || 0;
+    notif.email = data.email || null;
+    if (announce && notif.known !== null && notif.unread > notif.known) {
+      const fresh = notif.unread - notif.known;
+      toast(`Новое уведомление: ${fresh}`);
+    }
+    notif.known = notif.unread;
+    renderNotifications();
+  } catch (error) {
+    /* уведомления не должны ломать панель */
+  }
+}
+
+function placeNotifPanel() {
+  const panel = $("notifPanel");
+  const button = $("notifBtn");
+  if (!panel || !button) return;
+  const rect = button.getBoundingClientRect();
+  const width = Math.min(380, window.innerWidth - 24);
+  const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+  const height = panel.offsetHeight || 220;
+  let top = rect.bottom + 10;
+  if (top + height > window.innerHeight - 12) top = rect.top - height - 10;
+  top = Math.max(12, Math.min(top, window.innerHeight - height - 12));
+  panel.style.width = `${width}px`;
+  panel.style.left = `${Math.round(left)}px`;
+  panel.style.top = `${Math.round(top)}px`;
+}
+
+function toggleNotifPanel(force) {
+  const panel = $("notifPanel");
+  const button = $("notifBtn");
+  if (!panel || !button) return;
+  notif.open = typeof force === "boolean" ? force : !notif.open;
+  panel.hidden = !notif.open;
+  button.setAttribute("aria-expanded", notif.open ? "true" : "false");
+  if (notif.open) {
+    placeNotifPanel();
+    loadNotifications();
+  }
+}
+
+async function markNotifRead(ids) {
+  try {
+    const data = await api("/api/v1/notifications/read", {
+      method: "POST",
+      body: JSON.stringify(ids ? { ids } : {}),
+    });
+    notif.unread = data.unread;
+  } catch (error) {
+    /* не мешаем работе */
+  }
+}
+
+function bindNotifications() {
+  const button = $("notifBtn");
+  const panel = $("notifPanel");
+  if (!button || !panel) return;
+
+  // Панель уносим в body: у карточки фильтров есть backdrop-filter, а он превращает
+  // position: fixed во «внутренний» — панель уезжала бы вниз страницы.
+  if (panel.parentElement !== document.body) document.body.appendChild(panel);
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleNotifPanel();
+  });
+
+  const readAll = $("notifReadAll");
+  if (readAll) {
+    readAll.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await markNotifRead(null);
+      notif.items = notif.items.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() }));
+      renderNotifications();
+    });
+  }
+
+  const testButton = $("notifTest");
+  if (testButton) {
+    testButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const note = $("notifTestNote");
+      testButton.disabled = true;
+      if (note) note.textContent = "отправляю…";
+      try {
+        const data = await api("/api/v1/notifications/test", { method: "POST" });
+        const where = data.email && data.email.redirect_to ? data.email.redirect_to : data.to;
+        if (data.status === "sent") {
+          if (note) note.textContent = `доставлено на ${where}`;
+          toast(`Письмо отправлено на ${where}`);
+        } else if (data.status === "file") {
+          if (note) note.textContent = "SMTP не настроен: письмо в data/outbox";
+          toast("SMTP не настроен — письмо сохранено в outbox", true);
+        } else {
+          if (note) note.textContent = data.detail || "не удалось отправить";
+          toast(data.detail || "Почта не отправляется", true);
+        }
+      } catch (error) {
+        if (note) note.textContent = error.message;
+        toast(error.message, true);
+      } finally {
+        testButton.disabled = false;
+      }
+    });
+  }
+
+  $("notifList").addEventListener("click", async (event) => {
+    const item = event.target.closest("[data-notif]");
+    if (!item) return;
+    const id = Number(item.dataset.notif);
+    await markNotifRead([id]);
+    notif.items = notif.items.map((row) =>
+      row.id === id ? { ...row, read_at: row.read_at || new Date().toISOString() } : row
+    );
+    renderNotifications();
+    toggleNotifPanel(false);
+    if (item.dataset.link) window.location.href = item.dataset.link;
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!notif.open) return;
+    if (event.target.closest("#notifPanel, .notif-wrap")) return;
+    toggleNotifPanel(false);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && notif.open) toggleNotifPanel(false);
+  });
+
+  window.addEventListener("resize", () => {
+    if (notif.open) placeNotifPanel();
+  });
+
+  window.addEventListener("scroll", () => {
+    if (notif.open) placeNotifPanel();
+  }, { passive: true });
+}
+
+function renderEmployee() {
+  const box = $("employeeBox");
+  if (!box) return;
+  if (state.employee) {
+    const mine = $("myTasks");
+    if (mine) mine.classList.remove("hidden");
+    box.innerHTML = `
+      <span class="employee-name" title="${esc(state.employee.email)}">${esc(state.employee.full_name)}</span>
+      <button class="ghost" id="logoutBtn" type="button">Выйти</button>`;
+    const button = $("logoutBtn");
+    if (button) {
+      button.addEventListener("click", async () => {
+        try {
+          await api("/auth/logout", { method: "POST" });
+        } catch (error) {
+          /* всё равно сбрасываем состояние */
+        }
+        state.employee = null;
+        window.location.href = "/login";
+      });
+    }
+  } else {
+    const mine = $("myTasks");
+    if (mine) {
+      mine.classList.add("hidden");
+      mine.classList.remove("active");
+      mine.setAttribute("aria-pressed", "false");
+    }
+    state.onlyMine = false;
+    // Сайт доступен только после входа: анонимного состояния быть не должно.
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  }
+}
 
 async function loadHealth() {
   try {
@@ -207,8 +467,17 @@ async function loadTypes() {
 function taskCard(task) {
   const due = dueLabel(task);
   const actions = [];
+  const mine = state.employee && task.assignee_id === state.employee.id;
+  const busy = task.assignee_id && !mine;
+
   if (task.status === "created") {
-    actions.push(`<button class="primary" data-action="in_progress" data-id="${task.id}">В работу</button>`);
+    actions.push(
+      busy
+        ? `<span class="task-owner-note">взял ${esc(task.assignee_name || "другой сотрудник")}</span>`
+        : `<button class="primary" data-action="take" data-id="${task.id}">${
+            state.employee ? "Взять в работу" : "Войти и взять"
+          }</button>`
+    );
   } else if (task.status === "in_progress") {
     actions.push(`<button class="primary" data-action="done" data-id="${task.id}">Выполнена</button>`);
     actions.push(`<button class="ghost" data-action="created" data-id="${task.id}">В очередь</button>`);
@@ -217,13 +486,18 @@ function taskCard(task) {
   }
 
   return `
-    <article class="task ${task.effective_status}">
+    <article class="task ${task.effective_status}" id="task-${esc(task.id)}">
       <div class="task-head">
         <div class="task-main">
           <div class="task-kicker">
             <span class="badge type">${esc(task.promise_type_title || task.promise_type)}</span>
             <span class="badge ${task.effective_status}">${STATUS_LABELS[task.effective_status] || task.effective_status}</span>
             ${task.object ? `<span class="task-object">${esc(task.object)}</span>` : ""}
+            ${
+              task.assignee_name
+                ? `<span class="badge owner ${mine ? "mine" : ""}">${mine ? "взяли вы" : "взял " + esc(task.assignee_name)}</span>`
+                : ""
+            }
           </div>
           <h3 class="task-title">${esc(task.title)}</h3>
           <div class="task-sub">
@@ -291,6 +565,7 @@ async function loadTasks(append = false) {
   if (state.status) params.set("status", state.status);
   if (state.type) params.set("type", state.type);
   if (state.q) params.set("q", state.q);
+  if (state.onlyMine) params.set("assignee_id", "me");
   params.set("limit", state.limit);
   params.set("offset", state.offset);
   params.set("sort", state.status === "done" ? "-updated_at" : "due_at");
@@ -318,15 +593,28 @@ async function loadTasks(append = false) {
 }
 
 async function changeStatus(taskId, status, button) {
+  if (!state.employee) {
+    window.location.href = "/login?next=/";
+    return;
+  }
   button.disabled = true;
   try {
-    await api(`/api/v1/tasks/${taskId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    });
-    toast(status === "done" ? "Задача выполнена" : "Статус обновлён");
+    if (status === "take") {
+      await api(`/api/v1/tasks/${taskId}/take`, { method: "POST" });
+      toast("Задача закреплена за вами");
+    } else {
+      await api(`/api/v1/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      toast(status === "done" ? "Задача выполнена" : "Статус обновлён");
+    }
     await refresh();
   } catch (error) {
+    if (String(error.message).includes("войти")) {
+      window.location.href = "/login?next=/";
+      return;
+    }
     toast(error.message, true);
     button.disabled = false;
   }
@@ -580,7 +868,70 @@ if (analyticsButton) {
 
 (async function init() {
   await loadHealth();
+  await loadEmployee();
   await loadTypes();
   await refresh();
   setInterval(loadStats, 30000);
+
+  bindNotifications();
+  await loadNotifications();
+  setInterval(() => loadNotifications({ announce: true }), 45000);
+
+  const myTasks = $("myTasks");
+  if (myTasks) {
+    myTasks.addEventListener("click", () => {
+      state.onlyMine = !state.onlyMine;
+      myTasks.classList.toggle("active", state.onlyMine);
+      myTasks.setAttribute("aria-pressed", state.onlyMine ? "true" : "false");
+      state.offset = 0;
+      refresh();
+    });
+  }
+
+  // ссылка из напоминания: /?mine=1 — сразу только свои задачи
+  if (new URLSearchParams(window.location.search).get("mine") && state.employee && myTasks) {
+    state.onlyMine = true;
+    myTasks.classList.add("active");
+    myTasks.setAttribute("aria-pressed", "true");
+    await refresh();
+  }
+
+  // ссылка из письма: /?task=<id> — найти задачу, прокрутить и подсветить
+  const focusId = new URLSearchParams(window.location.search).get("task");
+  if (focusId) await focusTask(focusId);
 })();
+
+async function focusTask(id) {
+  let card = document.getElementById(`task-${id}`);
+
+  if (!card && state.employee && !state.onlyMine) {
+    state.onlyMine = true;
+    const my = $("myTasks");
+    if (my) {
+      my.classList.add("active");
+      my.setAttribute("aria-pressed", "true");
+    }
+    await refresh();
+    card = document.getElementById(`task-${id}`);
+  }
+
+  if (!card) {
+    try {
+      const task = await api(`/api/v1/tasks/${id}`);
+      state.q = task.title;
+      const search = $("search");
+      if (search) search.value = task.title;
+      await refresh();
+      card = document.getElementById(`task-${id}`);
+    } catch (error) {
+      /* задача могла быть удалена или недоступна */
+    }
+  }
+
+  if (card) {
+    card.classList.add("focused");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  } else {
+    toast("Задача из уведомления не найдена");
+  }
+}

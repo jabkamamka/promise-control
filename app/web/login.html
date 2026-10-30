@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f2eee5" />
+    <title>Вход — Контроль обещаний</title>
+    <link rel="stylesheet" href="/static/styles.css?v=12" />
+    <link rel="stylesheet" href="/static/auth.css?v=12" />
+  </head>
+  <body class="auth-body">
+    <div class="auth-shell">
+      <div class="auth-brand">
+        <div class="auth-logo" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none">
+            <path d="M9 26h7l4.5-12 6.5 23 5-15h7" stroke="currentColor" stroke-width="3"
+                  stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="39" cy="22" r="2.8" fill="#ff5a1f" />
+          </svg>
+        </div>
+        <div>
+          <h1>Контроль обещаний</h1>
+          <p>UralMicro · пульт сотрудника</p>
+        </div>
+      </div>
+
+      <div class="auth-card">
+        <h2>Вход</h2>
+        <p class="auth-sub">Пришлём ссылку на рабочую почту — пароль не нужен</p>
+
+        <div class="auth-tabs" role="tablist">
+          <button class="auth-tab active" type="button" data-tab="link" role="tab" aria-selected="true">
+            Ссылка на почту
+          </button>
+          <button class="auth-tab" type="button" data-tab="password" role="tab" aria-selected="false">
+            Пароль
+          </button>
+        </div>
+
+        <div id="error" class="auth-error" hidden></div>
+
+        <form id="linkForm">
+          <div class="auth-field">
+            <label for="email">Рабочая почта</label>
+            <input id="email" type="email" autocomplete="username" required placeholder="anna@company.ru" />
+          </div>
+          <div class="auth-field">
+            <label for="fullName">Имя и фамилия <span class="auth-optional">— только для новых</span></label>
+            <input id="fullName" type="text" autocomplete="name" placeholder="Анна Смирнова" />
+          </div>
+          <button class="auth-submit" type="submit">Получить ссылку</button>
+        </form>
+
+        <div id="sentBox" class="auth-sent auth-hidden">
+          <p class="auth-sent-head">
+            Письмо отправлено на <b id="sentEmail">—</b>
+          </p>
+          <p class="auth-sent-note">Ссылка и код действуют 15 минут и работают один раз.</p>
+
+          <p id="devRow" class="auth-dev" hidden>
+            <span>Демо-режим без SMTP:</span>
+            <a id="devLink" href="/">открыть ссылку из письма</a>
+            <span class="auth-dev-code">код <b id="devCode">—</b></span>
+          </p>
+
+          <form id="codeForm">
+            <div class="auth-field">
+              <label for="code">Код из письма</label>
+              <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" />
+            </div>
+            <button class="auth-submit" type="submit">Войти по коду</button>
+          </form>
+
+          <button id="again" class="auth-again" type="button">Отправить ещё раз</button>
+        </div>
+
+        <form id="passwordForm" class="auth-hidden">
+          <div class="auth-field">
+            <label for="passwordEmail">Почта</label>
+            <input id="passwordEmail" type="email" autocomplete="username" required placeholder="anna@company.ru" />
+          </div>
+          <div class="auth-field">
+            <label for="password">Пароль</label>
+            <input id="password" type="password" autocomplete="current-password" required minlength="8" />
+          </div>
+          <button class="auth-submit" type="submit">Войти</button>
+        </form>
+
+        <p class="auth-alt">
+          Первый раз? Введите почту — аккаунт создастся сам. Или
+          <a href="/register">задайте пароль</a>.
+        </p>
+      </div>
+    </div>
+
+    <script src="/static/auth.js?v=12"></script>
+    <script>
+      initAuthPage({ mode: "login" });
+    </script>
+  </body>
+</html>

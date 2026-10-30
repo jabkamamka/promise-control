@@ -1,0 +1,67 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f2eee5" />
+    <title>Регистрация — Контроль обещаний</title>
+    <link rel="stylesheet" href="/static/styles.css?v=12" />
+    <link rel="stylesheet" href="/static/auth.css?v=12" />
+  </head>
+  <body class="auth-body">
+    <div class="auth-shell">
+      <div class="auth-brand">
+        <div class="auth-logo" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none">
+            <path d="M9 26h7l4.5-12 6.5 23 5-15h7" stroke="currentColor" stroke-width="3"
+                  stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="39" cy="22" r="2.8" fill="#ff5a1f" />
+          </svg>
+        </div>
+        <div>
+          <h1>Контроль обещаний</h1>
+          <p>UralMicro · пульт сотрудника</p>
+        </div>
+      </div>
+
+      <div class="auth-card">
+        <h2>Регистрация</h2>
+        <p class="auth-sub">Аккаунт сотрудника по рабочей почте</p>
+
+        <div id="error" class="auth-error" hidden></div>
+
+        <form id="registerForm">
+          <div class="auth-field">
+            <label for="fullName">Имя и фамилия</label>
+            <input id="fullName" type="text" autocomplete="name" required minlength="2" placeholder="Анна Смирнова" />
+          </div>
+          <div class="auth-field">
+            <label for="email">Почта</label>
+            <input id="email" type="email" autocomplete="email" required placeholder="anna@company.ru" />
+          </div>
+          <div class="auth-field">
+            <label for="password">Пароль (не короче 8 символов)</label>
+            <input id="password" type="password" autocomplete="new-password" required minlength="8" />
+          </div>
+          <button class="auth-submit" type="submit">Создать аккаунт</button>
+        </form>
+
+        <div id="confirmBox" class="auth-sent auth-hidden">
+          <p class="auth-sent-head">Письмо с подтверждением отправлено на <b id="confirmEmail">—</b></p>
+          <p class="auth-sent-note">
+            Пока почта не подтверждена, вход в панель закрыт. Ссылка действует 24 часа.
+          </p>
+          <p hidden><a id="confirmDevLink" href="/">Открыть ссылку из письма (демо)</a></p>
+          <button id="confirmResend" class="auth-again" type="button">Отправить письмо ещё раз</button>
+        </div>
+
+        <p class="auth-alt">Уже подтвердили? <a href="/login">Войти</a></p>
+      </div>
+    </div>
+
+    <script src="/static/auth.js?v=12"></script>
+    <script>
+      initAuthPage({ mode: "register" });
+    </script>
+  </body>
+</html>

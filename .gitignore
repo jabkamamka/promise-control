@@ -25,3 +25,8 @@ sender_windows_*.exe
 *.m4a
 *.docx
 *.pdf
+
+# --- Почта и локальные логи ---
+data/outbox/
+_srv.log
+*.log

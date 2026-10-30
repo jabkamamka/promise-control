@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f2eee5" />
     <meta name="color-scheme" content="light" />
     <title>Контроль обещаний — панель оператора</title>
-    <link rel="stylesheet" href="/static/styles.css?v=3" />
+    <link rel="stylesheet" href="/static/styles.css?v=11" />
   </head>
   <body>
     <a class="skip-link" href="#taskList">Перейти к задачам</a>
@@ -120,6 +120,44 @@
               <span class="label-wide">Аналитика</span>
               <span class="label-compact">Графики</span>
             </button>
+
+            <button id="myTasks" class="ghost hidden" type="button" aria-pressed="false">Мои задачи</button>
+
+            <div class="notif-wrap">
+              <button
+                id="notifBtn"
+                class="ghost notif-btn"
+                type="button"
+                aria-expanded="false"
+                aria-controls="notifPanel"
+                title="Уведомления"
+              >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4a5 5 0 0 0-5 5v4l-1.7 3.2h13.4L17 13V9a5 5 0 0 0-5-5Z"></path>
+                  <path d="M10 19a2 2 0 0 0 4 0"></path>
+                </svg>
+                <span class="notif-btn-label">Уведомления</span>
+                <span id="notifBadge" class="notif-badge" hidden>0</span>
+              </button>
+
+              <div id="notifPanel" class="notif-panel" hidden role="dialog" aria-label="Уведомления">
+                <div class="notif-head">
+                  <span>Уведомления</span>
+                  <button id="notifReadAll" class="text-btn" type="button">Прочитать все</button>
+                </div>
+                <ul id="notifList" class="notif-list"></ul>
+                <p id="notifEmpty" class="notif-empty">
+                  Пока пусто. Сюда придут напоминания о сроках обещаний, которые вы взяли.
+                </p>
+                <p id="notifFoot" class="notif-foot"></p>
+                <p class="notif-test">
+                  <button id="notifTest" class="text-btn" type="button">Проверить почту</button>
+                  <span id="notifTestNote" class="notif-test-note"></span>
+                </p>
+              </div>
+            </div>
+
+            <div id="employeeBox" class="employee-box" aria-live="polite"></div>
           </div>
         </div>
       </section>
@@ -223,6 +261,6 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=3"></script>
+    <script src="/static/app.js?v=13"></script>
   </body>
 </html>

@@ -196,6 +196,7 @@ def _build_filters(
     due_after: str | None,
     q: str | None,
     verification: str | None = None,
+    assignee_id: int | None = None,
 ) -> tuple[str, list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -241,6 +242,9 @@ def _build_filters(
         if parts:
             clauses.append("(" + " OR ".join(parts) + ")")
             params.extend(local_params)
+    if assignee_id is not None:
+        clauses.append("t.assignee_id = ?")
+        params.append(assignee_id)
     if promise_type:
         clauses.append("t.promise_type = ?")
         params.append(promise_type)
@@ -274,12 +278,13 @@ def list_tasks(
     due_after: str | None = None,
     q: str | None = None,
     verification: str | None = None,
+    assignee_id: int | None = None,
     sort: str = "due_at",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
     where, params = _build_filters(
-        status, promise_type, operator_id, call_id, due_before, due_after, q, verification
+        status, promise_type, operator_id, call_id, due_before, due_after, q, verification, assignee_id
     )
 
     field = sort.lstrip("-")
@@ -354,7 +359,11 @@ def insert_task(conn: sqlite3.Connection, task: dict[str, Any]) -> bool:
 
 
 def update_status(
-    conn: sqlite3.Connection, task_id: str, new_status: str, comment: str | None = None
+    conn: sqlite3.Connection,
+    task_id: str,
+    new_status: str,
+    comment: str | None = None,
+    employee: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     task = get_task(conn, task_id)
     if not task:
@@ -376,6 +385,16 @@ def update_status(
         "UPDATE tasks SET status = ?, updated_at = ?, closed_at = ? WHERE id = ?",
         (new_status, now, closed, task_id),
     )
+    # взял в работу — фиксируем сотрудника, если задача ещё ничья
+    if new_status == "in_progress" and employee and not task.get("assignee_id"):
+        conn.execute(
+            "UPDATE tasks SET assignee_id = ?, assignee_name = ?, taken_at = ? WHERE id = ?",
+            (employee["id"], employee["full_name"], now, task_id),
+        )
+        conn.execute(
+            "INSERT INTO task_events (task_id, event, from_status, to_status, comment, at) VALUES (?,?,?,?,?,?)",
+            (task_id, "taken", None, None, f"Взял в работу: {employee['full_name']}", now),
+        )
     conn.execute(
         "INSERT INTO task_events (task_id, event, from_status, to_status, comment, at) VALUES (?,?,?,?,?,?)",
         (task_id, "status_changed", current, new_status, comment, now),
@@ -387,6 +406,43 @@ def update_status(
 def list_events(conn: sqlite3.Connection, task_id: str) -> list[dict[str, Any]]:
     rows = conn.execute("SELECT * FROM task_events WHERE task_id = ? ORDER BY id", (task_id,)).fetchall()
     return [dict(r) for r in rows]
+
+
+def assign_task(conn: sqlite3.Connection, task_id: str, employee: dict[str, Any]) -> dict[str, Any]:
+    """Сотрудник берёт задачу в работу. Задача становится «В работе», за ним закрепляется."""
+    task = get_task(conn, task_id)
+    if not task:
+        raise KeyError(task_id)
+    if task["status"] == "done":
+        raise TaskError("Задача уже выполнена — верните её в работу, если нужно переделать")
+
+    current_assignee = task.get("assignee_id")
+    if current_assignee and current_assignee != employee["id"]:
+        raise TaskError(f"Задачу уже взял {task.get('assignee_name') or 'другой сотрудник'}")
+
+    now = utc_now()
+    changed = task["status"] != "in_progress"
+    if changed and "in_progress" not in TRANSITIONS.get(task["status"], set()):
+        raise TaskError("Эту задачу нельзя взять в работу из текущего статуса")
+
+    conn.execute(
+        """UPDATE tasks
+           SET status = 'in_progress', assignee_id = ?, assignee_name = ?, taken_at = COALESCE(taken_at, ?),
+               updated_at = ?
+           WHERE id = ?""",
+        (employee["id"], employee["full_name"], now, now, task_id),
+    )
+    if changed:
+        conn.execute(
+            "INSERT INTO task_events (task_id, event, from_status, to_status, comment, at) VALUES (?,?,?,?,?,?)",
+            (task_id, "status_changed", task["status"], "in_progress", "Взял в работу", now),
+        )
+    conn.execute(
+        "INSERT INTO task_events (task_id, event, from_status, to_status, comment, at) VALUES (?,?,?,?,?,?)",
+        (task_id, "taken", None, None, f"Исполнитель: {employee['full_name']}", now),
+    )
+    conn.commit()
+    return get_task(conn, task_id)  # type: ignore[return-value]
 
 
 # --------------------------------------------------------------------------- #

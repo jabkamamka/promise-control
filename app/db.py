@@ -9,7 +9,7 @@ from .config import settings
 from .services.taxonomy import BUILTIN_TYPES
 from .utils import utc_now
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -84,6 +84,58 @@ CREATE TABLE IF NOT EXISTS task_events (
     at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_task ON task_events(task_id);
+
+CREATE TABLE IF NOT EXISTS employees (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    email            TEXT NOT NULL UNIQUE,
+    password_hash    TEXT NOT NULL,
+    full_name        TEXT NOT NULL DEFAULT '',
+    role             TEXT NOT NULL DEFAULT 'operator',
+    is_active        INTEGER NOT NULL DEFAULT 1,
+    email_confirmed_at TEXT,
+    created_at       TEXT NOT NULL,
+    last_login_at    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token       TEXT PRIMARY KEY,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_employee ON sessions(employee_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id   INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    task_id       TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+    kind          TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    body          TEXT NOT NULL DEFAULT '',
+    link          TEXT NOT NULL DEFAULT '/',
+    read_at       TEXT,
+    email_status  TEXT,
+    email_error   TEXT,
+    email_sent_at TEXT,
+    created_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_once
+    ON notifications(employee_id, kind, IFNULL(task_id, ''));
+CREATE INDEX IF NOT EXISTS idx_notifications_employee
+    ON notifications(employee_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS login_tokens (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    code       TEXT NOT NULL,
+    purpose    TEXT NOT NULL DEFAULT 'login',
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_login_tokens_email ON login_tokens(email, created_at);
 """
 
 
@@ -96,11 +148,39 @@ _VERIFICATION_COLUMNS = (
     "verified_at TEXT",
     "verified_call_id TEXT",
     "verification_quote TEXT",
+    "assignee_id INTEGER",
+    "assignee_name TEXT",
+    "taken_at TEXT",
+    "reminder_sent_at TEXT",
 )
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Доводит существующую БД до текущей версии схемы."""
+    _migrate_tasks(conn)
+    _migrate_employees(conn)
+    _ensure_employee_columns(conn)
+    conn.executescript("DROP TABLE IF EXISTS auth_codes;")
+    conn.commit()
+
+
+def _ensure_employee_columns(conn: sqlite3.Connection) -> None:
+    """Добавляет новые поля сотрудников. Старым аккаунтам почту считаем подтверждённой."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(employees)")}
+    if not columns:
+        return
+    if "email_confirmed_at" not in columns:
+        conn.execute("ALTER TABLE employees ADD COLUMN email_confirmed_at TEXT")
+        conn.execute("UPDATE employees SET email_confirmed_at = created_at WHERE email_confirmed_at IS NULL")
+        conn.commit()
+
+    token_columns = {row["name"] for row in conn.execute("PRAGMA table_info(login_tokens)")}
+    if token_columns and "purpose" not in token_columns:
+        conn.execute("ALTER TABLE login_tokens ADD COLUMN purpose TEXT NOT NULL DEFAULT 'login'")
+        conn.commit()
+
+
+def _migrate_tasks(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(tasks)")}
     if not columns:
         return
@@ -108,6 +188,41 @@ def _migrate(conn: sqlite3.Connection) -> None:
         name = definition.split()[0]
         if name not in columns:
             conn.execute(f"ALTER TABLE tasks ADD COLUMN {definition}")
+    conn.commit()
+
+
+def _migrate_employees(conn: sqlite3.Connection) -> None:
+    """Убирает из сотрудников поля Telegram: вход теперь только по почте."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(employees)")}
+    if not columns or "telegram_id" not in columns:
+        return
+
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE employees_new (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                email         TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                full_name     TEXT NOT NULL DEFAULT '',
+                role          TEXT NOT NULL DEFAULT 'operator',
+                is_active     INTEGER NOT NULL DEFAULT 1,
+                created_at    TEXT NOT NULL,
+                last_login_at TEXT
+            );
+            INSERT INTO employees_new
+                (id, email, password_hash, full_name, role, is_active, created_at, last_login_at)
+            SELECT id, email, password_hash, full_name, role, is_active, created_at, last_login_at
+            FROM employees;
+            DROP TABLE employees;
+            ALTER TABLE employees_new RENAME TO employees;
+            """
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def connect() -> sqlite3.Connection:

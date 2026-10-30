@@ -80,5 +80,41 @@ class Settings:
     #: снимок звонков из API (data/sample_calls.json). По умолчанию выключено.
     auto_seed: bool = _env_bool("AUTO_SEED", False)
 
+    #: Публичный адрес сервиса: подставляется в ссылки внутри писем.
+    public_base_url: str = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8080")
+
+    #: Напоминания сотрудникам: за сколько минут до срока и включены ли они.
+    reminder_enabled: bool = _env_bool("REMINDER_ENABLED", True)
+    reminder_minutes_before: int = _env_int("REMINDER_MINUTES_BEFORE", 60)
+
+    #: Фоновая рассылка уведомлений (в интерфейс и на почту).
+    notify_enabled: bool = _env_bool("NOTIFY_ENABLED", True)
+    notify_interval_seconds: int = _env_int("NOTIFY_INTERVAL_SECONDS", 60)
+    notify_start_delay_seconds: int = _env_int("NOTIFY_START_DELAY_SECONDS", 5)
+
+    #: Почта: как отправлять письма.
+    #: auto — SMTP, если задан SMTP_HOST, иначе файл в data/outbox (удобно без сети);
+    #: smtp — только SMTP; file — только файл (письма не уходят наружу).
+    email_enabled: bool = _env_bool("EMAIL_ENABLED", True)
+    email_transport: str = os.environ.get("EMAIL_TRANSPORT", "auto").strip().lower()
+    email_from: str = os.environ.get(
+        "EMAIL_FROM", "Контроль обещаний <no-reply@promise-control.local>"
+    )
+    email_outbox: str = os.environ.get("EMAIL_OUTBOX", str(BASE_DIR / "data" / "outbox"))
+
+    smtp_host: str = os.environ.get("SMTP_HOST", "")
+    smtp_port: int = _env_int("SMTP_PORT", 0)
+    smtp_user: str = os.environ.get("SMTP_USER", "")
+    smtp_password: str = os.environ.get("SMTP_PASSWORD", "")
+    #: starttls | ssl | none | auto (по домену почты)
+    smtp_security: str = os.environ.get("SMTP_SECURITY", "auto").strip().lower()
+    smtp_timeout: int = _env_int("SMTP_TIMEOUT", 15)
+
+    #: Демо без реальных ящиков: все письма уходят на этот адрес.
+    email_redirect_to: str = os.environ.get("EMAIL_REDIRECT_TO", "").strip()
+
+    #: Переадресовывать только эти домены (через запятую). Пусто — переадресовывать всё.
+    email_redirect_domains: str = os.environ.get("EMAIL_REDIRECT_DOMAINS", "").strip()
+
 
 settings = Settings()
