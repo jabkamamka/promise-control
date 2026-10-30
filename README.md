@@ -220,3 +220,7 @@ scripts/             seed_demo.py, build_pitch.py, check_pitch.py
 бэклог — [docs/ROADMAP.md](docs/ROADMAP.md). Из первой версии взяты: разбор аудиозаписи брифинга
 ([docs/RECORDING_8.md](docs/RECORDING_8.md)), идея искать срок в следующей реплике оператора
 и совместимые адреса API (`POST /calls`, `PATCH /api/v1/tasks/{id}/status`).
+
+## Партнёры
+
+Партнёр проекта: MUSOR DROP — https://musor.bar/
